@@ -42,8 +42,6 @@ jobs:
       - run: pnpm --filter @cluster/editor-schema build
       - run: pnpm --filter @cluster/theme build
       - run: pnpm --filter @cluster/api exec prisma generate
-      # Docs content rules, including a changelog entry for every release tag
-      - run: pnpm --filter @cluster/docs check:content
       - run: pnpm typecheck
       # Includes the token guard, the module dependency rule and the system-client allow list
       - run: pnpm lint
@@ -107,7 +105,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [api, web, collab, site, docs]
+        image: [api, web, collab]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # A failed build fails the job

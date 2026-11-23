@@ -222,8 +222,6 @@ pnpm dev
 | Web (Next.js) | http://localhost:3000 |
 | API (NestJS) | http://localhost:3001 (health: `/api/v1/health`) |
 | Collab (WebSocket) | ws://localhost:3002 |
-| Site (static landing) | http://localhost:3003 (`https://clusterhq.app`) |
-| Docs (static docs) | http://localhost:3004 (`https://docs.clusterhq.app`) |
 | Mailpit inbox | http://localhost:8025 |
 | SeaweedFS Master UI | http://localhost:9333 |
 | SeaweedFS S3 Endpoint | http://localhost:9000 |
@@ -245,8 +243,6 @@ All commands run from the repository root.
 pnpm dev              # API + Web + collab in dev mode
 pnpm api:dev          # API only (port 3001)
 pnpm web:dev          # Web only (port 3000)
-pnpm site:dev         # Public landing site only (port 3003)
-pnpm docs:dev         # Public documentation site only (port 3004)
 pnpm collab:dev       # Collab service only (port 3002)
 
 pnpm build            # Build all apps
@@ -285,7 +281,7 @@ pnpm --filter @cluster/api exec dotenv -e ../../.env -- prisma migrate dev --nam
   - Invitation and password-reset flows read the real emails from Mailpit's API.
 - Current suite (2026-11-19): **2,143 unit tests** (across `web`, `editor-schema`, `theme`, `api`, `collab`, `site` and `docs`) and **810 e2e tests**. Organization isolation is proven by PostgreSQL RLS specs (`rls-isolation`, `rls-guards`, `rls-self-check`, `tenant-pool.integration`) and by feature e2e for CONNECT, organization structure, files, KNOW, documents and every GROW route; space access rules by `know-access`, `know-sharing` and `capabilities`; the LMS by `course-access`, `courses`, `course-content`, `course-video`, `assignments`, `learning`, `attempts`, `certificates` and `reports`. Realtime editing has integration e2e that boot the collab service.
 - Conventions: test flows through the HTTP API, one data set per test via `createActor`, unit tests only for pure logic, and the failing test is written before the fix.
-- **CI** (`.github/workflows/ci.yml`, on every pull request and on pushes to `main` and `dev`): `check` (docs content check, typecheck, lint with the RLS and module-boundary guards, unit tests), `e2e` (the suite above against the dev compose services), `security` (gitleaks over the history; `pnpm audit` blocking at critical) and `images` (builds the `api`, `web`, `collab`, `site` and `docs` images and scans them with Trivy). Dependabot proposes npm, GitHub Actions and Docker updates weekly.
+- **CI** (`.github/workflows/ci.yml`, on every pull request and on pushes to `main` and `dev`): `check` (typecheck, lint with the RLS and module-boundary guards, unit tests), `e2e` (the suite above against the dev compose services), `security` (gitleaks over the history; `pnpm audit` blocking at critical) and `images` (builds the `api`, `web` and `collab` images and scans them with Trivy). Dependabot proposes npm, GitHub Actions and Docker updates weekly.
 
 ## Project status
 
@@ -300,10 +296,10 @@ Verified on 2026-11-19: `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:e
 | CONNECT | Audited and split by responsibility; isolation, feed, comments, directory (table, cards, interactive org chart) and celebrations covered by e2e and polished on the design system |
 | KNOW | Audited: isolation, drafts, search, Markdown import/export and storage cleanup proven by e2e; per-space access list and member capabilities; realtime collaborative editing (`apps/collab`); page and space files with in-app image and PDF previews and live space description |
 | GROW (LMS) | Full LMS delivered and audited: authoring, text/video-link/file/uploaded-video lessons (up to 1 GB with byte ranges, `course-video.e2e-spec.ts`), mandatory assignments by person/area/position, learner player, quizzes and manual review queue, themed PDF certificates with public verification, compliance reports, CSV export and dashboard |
-| Public site & documentation | `apps/site` (`https://clusterhq.app`) and `apps/docs` (`https://docs.clusterhq.app`, 66 pages across EN/ES with Pagefind static search and automated content/env/link checks) built as static exports with Dockerfiles |
+| Public site & documentation | Hosted separately at [clusterhq.app](https://clusterhq.app) and [docs.clusterhq.app](https://docs.clusterhq.app) |
 | LIFE | Stub (planned) |
 | Storage | Private S3 bucket (SeaweedFS), content-based magic-byte file validation, byte-range streaming and per-resource access checks proven by e2e |
-| Deployment | Docker images (`api`, `web`, `collab`, `site`, `docs`), `docker-compose.yml` with optional Caddy TLS profile, backup/restore scripts (`scripts/backup/`, `restic`) and self-hosting guides ([docs.clusterhq.app](https://docs.clusterhq.app)) |
+| Deployment | Docker images (`api`, `web`, `collab`), `docker-compose.yml` with optional Caddy TLS profile, backup/restore scripts (`scripts/backup/`, `restic`) and self-hosting guides ([docs.clusterhq.app](https://docs.clusterhq.app)) |
 
 Known debt: three similar tree components in the web admin screens, CONNECT celebration settings live on the `Organization` table, realtime editing open items (listed in `AGENTS.md`). Module boundaries (core ← features, no feature → feature) are enforced by ESLint in both apps (`no-restricted-imports`).
 
@@ -425,17 +421,15 @@ cluster/
 │   │   │   ├── (app)/                # authenticated area (know, grow, connect, settings incl. instance)
 │   │   │   ├── login/ register/ forgot-password/ set-password/
 │   │   │   ├── verify/               # public certificate verification page
-│   │   │   └── page.tsx              # redirects to /login (landing lives in apps/site)
+│   │   │   └── page.tsx              # redirects to /login
 │   │   ├── components/               # ui/ (shadcn), shared/, settings/ (core admin), instance/, know/, grow/, connect/
 │   │   ├── hooks/
 │   │   └── lib/                      # api.ts, org-api.ts (areas/positions/profile), admin-api.ts, connect-api.ts, auth context, modules, navigation
-│   ├── site/                         # public static site (https://clusterhq.app, EN/ES)
-│   ├── docs/                         # public static documentation (https://docs.clusterhq.app, EN/ES, Pagefind)
 │   └── collab/                       # realtime editing service (Hocuspocus); the API talks to it over HTTP
 ├── packages/
 │   ├── editor-schema/                # shared document schema (API validates, collab converts, web renders)
-│   └── theme/                        # theme contract and WCAG contrast verifier shared by API, web, site and docs
-├── docker/                           # Dockerfile.api, Dockerfile.web, Dockerfile.collab, Dockerfile.site, Dockerfile.docs, Caddyfile, storage/start.sh
+│   └── theme/                        # theme contract and WCAG contrast verifier shared by API and web
+├── docker/                           # Dockerfile.api, Dockerfile.web, Dockerfile.collab, Caddyfile, storage/start.sh
 ├── docker-compose.dev.yml            # Dev infrastructure (Postgres, Redis, SeaweedFS, Mailpit)
 ├── docker-compose.yml                # Production stack
 └── turbo.json
@@ -475,7 +469,7 @@ Resend in production: `SMTP_HOST=smtp.resend.com`, `SMTP_PORT=465`, `SMTP_SECURE
 
 ## Deployment
 
-Full self-hosting guides (requirements, Docker Compose setup, reverse proxy, updates, backups, monitoring, and troubleshooting) live in [`apps/docs`](apps/docs) and at [docs.clusterhq.app](https://docs.clusterhq.app).
+Full self-hosting guides (requirements, Docker Compose setup, reverse proxy, updates, backups, monitoring, and troubleshooting) live at [docs.clusterhq.app](https://docs.clusterhq.app).
 
 Backups: `scripts/backup/` (`pg_dump` as the owner plus a bucket mirror, both to `restic` off the host). Always run a restore drill before going live.
 

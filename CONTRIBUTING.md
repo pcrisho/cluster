@@ -22,7 +22,6 @@ Run the following checks from the repository root and make sure they pass:
 pnpm typecheck
 pnpm lint
 pnpm test
-pnpm --filter @cluster/docs check:content
 ```
 
 If your changes touch the API, database schema, permissions, or storage, also run the e2e suite against the local Docker dev stack:
