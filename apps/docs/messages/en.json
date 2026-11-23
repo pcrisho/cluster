@@ -1,0 +1,51 @@
+{
+  "chrome": {
+    "home": "Docs",
+    "intro": "Guides to evaluate, install and run Cluster, and to use its modules.",
+    "skipToContent": "Skip to content",
+    "menu": "Menu",
+    "onThisPage": "On this page",
+    "previous": "Previous",
+    "next": "Next",
+    "language": "Language",
+    "theme": "Theme",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System",
+    "backToSite": "Cluster website",
+    "notFoundTitle": "Page not found",
+    "notFoundBody": "This page does not exist in the documentation.",
+    "allSections": "All sections",
+    "securityContactLabel": "Security contact",
+    "securityContactUnset": "No security contact is configured for this build."
+  },
+  "ui": {
+    "close": "Close",
+    "copy": "Copy",
+    "copied": "Copied"
+  },
+  "search": {
+    "button": "Search",
+    "placeholder": "Search documentation...",
+    "title": "Search documentation",
+    "description": "Type a word to search pages in this language.",
+    "sections": "Sections",
+    "noResults": "No results for \"{query}\".",
+    "browseHint": "Browse sections from the sidebar or try another word.",
+    "loading": "Searching...",
+    "unavailable": "Search is only available in the built site.",
+    "shortcut": "Ctrl K"
+  },
+  "sections": {
+    "overview": "Overview",
+    "evaluate": "Evaluate",
+    "self-host": "Self-host",
+    "administration": "Administration",
+    "know": "KNOW",
+    "grow": "GROW",
+    "account": "Account",
+    "help": "Help",
+    "connect": "CONNECT",
+    "changelog": "Changelog"
+  }
+}

@@ -1,0 +1,12 @@
+# Default rules plus one allowance: test fixtures (fake shared secrets and TOTP seeds in specs).
+# Only the generic rule is silenced there; provider-specific rules still apply to these files.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Fake secrets in test files"
+targetRules = ["generic-api-key"]
+paths = [
+  '''\.(e2e-)?spec\.ts$''',
+  '''apps/collab/src/testing/''',
+]

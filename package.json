@@ -1,0 +1,47 @@
+{
+  "name": "cluster",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "test:e2e": "pnpm --filter @cluster/editor-schema build && pnpm --filter @cluster/theme build && pnpm --filter @cluster/api test:e2e",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json}\"",
+    "api:dev": "pnpm --filter @cluster/api dev",
+    "web:dev": "pnpm --filter @cluster/web dev",
+    "site:dev": "pnpm --filter @cluster/site dev",
+    "docs:dev": "pnpm --filter @cluster/docs dev",
+    "collab:dev": "pnpm --filter @cluster/collab dev",
+    "verify:tokens": "pnpm --filter @cluster/theme test -- --verbose",
+    "lint:tokens": "pnpm --filter @cluster/web lint:tokens"
+  },
+  "devDependencies": {
+    "dotenv-cli": "^11.0.0",
+    "prettier": "^3.4.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@9.15.4",
+  "pnpm": {
+    "overrides": {
+      "proxy-addr@<2.0.8": "^2.0.8",
+      "body-parser@<2.4.0": "^2.4.0",
+      "multer@<2.5.0": "^2.5.0",
+      "ws@<8.21.0": "^8.21.0",
+      "engine.io@<6.6.10": "^6.6.10",
+      "socket.io-parser@<4.2.7": "^4.2.7",
+      "browserslist@<4.28.7": "^4.28.7",
+      "source-map-js@<1.2.2": "^1.2.2",
+      "nanoid@<3.3.18": "^3.3.18",
+      "fast-uri@<3.1.7": "^3.1.7",
+      "brace-expansion@<1.1.20": "^1.1.20",
+      "brace-expansion@>=2.0.0 <2.1.6": "^2.1.6",
+      "js-yaml@>=3.0.0 <3.15.2": "^3.15.2"
+    }
+  }
+}

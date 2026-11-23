@@ -1,0 +1,67 @@
+# TLS proxy for the `proxy` compose profile. One site: web, /api, /socket.io and /collab share
+# {$CLUSTER_DOMAIN} (the session cookie is SameSite=Strict, so one site is the simplest). Caddy gets and
+# renews the certificate by itself (ports 80/443 must reach it; a domain that points at this server).
+# Security headers (CSP, HSTS) come from the apps; do not repeat them here.
+{$CLUSTER_DOMAIN} {
+	encode zstd gzip
+
+	# Never reachable from outside: only the compose network may call these.
+	@internal path /api/v1/internal /api/v1/internal/* /collab/control /collab/control/* /collab/health /control /control/*
+	handle @internal {
+		respond 404
+	}
+
+	# Realtime editing: the browser opens a WebSocket here; the prefix is stripped.
+	handle_path /collab/* {
+		reverse_proxy collab:3002 {
+			# Idle sockets are kept alive by pings; reaching collab fails fast.
+			transport http {
+				dial_timeout 5s
+			}
+		}
+	}
+
+	# Lesson video upload: the body is the file (up to 1 GB), streamed to the API (Caddy does not buffer
+	# request bodies) and the API waits up to 1 h for a slow client. Only this route.
+	@video {
+		method PUT
+		path_regexp ^/api/v1/grow/steps/[^/]+/video$
+	}
+	handle @video {
+		request_body {
+			max_size 1100MB
+		}
+		reverse_proxy api:3001 {
+			transport http {
+				dial_timeout 5s
+				response_header_timeout 1h
+			}
+		}
+	}
+
+	# The rest of the API and the notifications/feed socket. Largest ordinary upload is 50 MB.
+	@api path /api/* /socket.io/*
+	handle @api {
+		request_body {
+			max_size 60MB
+		}
+		reverse_proxy api:3001 {
+			transport http {
+				dial_timeout 5s
+				response_header_timeout 2m
+			}
+		}
+	}
+
+	handle {
+		request_body {
+			max_size 10MB
+		}
+		reverse_proxy web:3000 {
+			transport http {
+				dial_timeout 5s
+				response_header_timeout 2m
+			}
+		}
+	}
+}
