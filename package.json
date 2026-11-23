@@ -11,8 +11,6 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json}\"",
     "api:dev": "pnpm --filter @cluster/api dev",
     "web:dev": "pnpm --filter @cluster/web dev",
-    "site:dev": "pnpm --filter @cluster/site dev",
-    "docs:dev": "pnpm --filter @cluster/docs dev",
     "collab:dev": "pnpm --filter @cluster/collab dev",
     "verify:tokens": "pnpm --filter @cluster/theme test -- --verbose",
     "lint:tokens": "pnpm --filter @cluster/web lint:tokens"

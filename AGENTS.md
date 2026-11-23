@@ -9,12 +9,10 @@ apps/
   api/          # NestJS 11 REST + Socket.IO API, Prisma 7, PostgreSQL 16 (RLS)
   web/          # Next.js 16 App Router frontend (shadcn/ui, Tailwind CSS 4)
   collab/       # Realtime collaborative editing service (Node 22, Hocuspocus + Yjs)
-  site/         # Public marketing site (https://clusterhq.app, static export, EN/ES)
-  docs/         # Public product documentation (https://docs.clusterhq.app, static export, EN/ES, Pagefind)
 packages/
   editor-schema/ # Shared rich-text document schema, validation, Markdown conversion, file-type catalog
   theme/         # Design-token contrast contract, OKLCH theme derivation, glass levels
-docker/         # Production Dockerfiles, Caddyfile, nginx config, SeaweedFS startup
+docker/         # Production Dockerfiles, Caddyfile, SeaweedFS startup
 scripts/        # Backup (restic), operational checks, and performance/load scripts
 ```
 
@@ -38,8 +36,6 @@ pnpm dev
 | Web (Next.js) | http://localhost:3000 |
 | API (NestJS) | http://localhost:3001 |
 | Collab (Hocuspocus) | ws://localhost:3002 |
-| Site (static) | http://localhost:3003 (`https://clusterhq.app`) |
-| Docs (static) | http://localhost:3004 (`https://docs.clusterhq.app`) |
 | Mailpit inbox | http://localhost:8025 |
 | SeaweedFS Master UI | http://localhost:9333 |
 
@@ -52,7 +48,7 @@ Run from the repository root:
 | Command | Purpose |
 | --- | --- |
 | `pnpm dev` | Run API, Web and Collab concurrently |
-| `pnpm api:dev` / `pnpm web:dev` / `pnpm site:dev` / `pnpm docs:dev` / `pnpm collab:dev` | Run a single app |
+| `pnpm api:dev` / `pnpm web:dev` / `pnpm collab:dev` | Run a single app |
 | `pnpm build` | Build all packages and apps |
 | `pnpm typecheck` | TypeScript `--noEmit` across the workspace |
 | `pnpm lint` | ESLint across all apps (includes module boundaries, RLS allowlist, and token guard) |
@@ -60,7 +56,6 @@ Run from the repository root:
 | `pnpm verify:tokens` | WCAG contrast verification of every colour-token pair in light and dark themes |
 | `pnpm test` | Unit tests (Jest) across all packages and apps |
 | `pnpm test:e2e` | API e2e tests against real Postgres, Redis, SeaweedFS and Mailpit |
-| `pnpm --filter @cluster/docs check:content` | Validate EN/ES parity, frontmatter, env vars, service names, forbidden values, and changelog tags |
 
 ### Prisma
 
@@ -80,6 +75,6 @@ pnpm --filter @cluster/api prisma:studio     # Open Prisma Studio
   - Migrations, seeds and backups use `DATABASE_OWNER_URL`, which never enters the API container.
 - **Access control:** Enforce on the API using `@RequireModule`, `@Roles`, `@SuperAdminOnly`, `@Public`, and resource-level services (`SpaceAccessService`, `CourseAccessService`). Every organization-scoped route must have an e2e test proving another organization cannot read or modify its data.
 - **Internationalization (EN / ES):** All user-facing copy lives in `apps/web/messages/{en,es}.json` and `apps/api/src/i18n/{en,es}.ts`. Product and module names (`Cluster`, `CONNECT`, `KNOW`, `GROW`, `LIFE`) are not translated.
-- **Design tokens:** Use semantic CSS tokens from `globals.css` and `@cluster/theme`. Any token change in `apps/web/app/globals.css` must be mirrored to `apps/site/app/globals.css`, `apps/docs/app/globals.css`, and `packages/theme/src/base.ts` (enforced by drift tests).
+- **Design tokens:** Use semantic CSS tokens from `globals.css` and `@cluster/theme`. Any token change in `apps/web/app/globals.css` must be mirrored to `packages/theme/src/base.ts` (enforced by drift tests).
 - **Formatting:** Prettier (`pnpm format`) with no semicolons, double quotes, trailing commas. API imports must be relative (no `src/...` absolute paths).
-- **Security:** Never commit secrets or `.env`. Never place development seed credentials or TOTP secrets in `apps/docs/content/` (enforced by `check:content`).
+- **Security:** Never commit secrets or `.env`.
