@@ -1,0 +1,12 @@
+# Keep host artifacts and secrets out of the build context
+**/node_modules
+**/.next
+**/dist
+**/.turbo
+**/coverage
+.git
+.env
+.env.*
+!.env.example
+.playwright-mcp
+.codebase-memory

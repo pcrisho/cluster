@@ -1,0 +1,907 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ────────────────────────────────────────────
+
+// Role of a principal on a resource (a KNOW space, later a GROW course).
+enum AccessRole {
+  VIEWER
+  EDITOR
+  MANAGER
+}
+
+// Organization-wide permissions an admin grants to specific people. Each value belongs to a module.
+enum Capability {
+  KNOW_SPACE_CREATE
+  KNOW_SPACE_DELETE
+  GROW_COURSE_MANAGE
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  COLLABORATOR
+}
+
+// Feature modules that can be enabled per instance and per organization.
+enum ModuleKey {
+  KNOW
+  GROW
+  CONNECT
+  LIFE
+}
+
+enum PostType {
+  POST
+  ANNOUNCEMENT
+}
+
+enum PageStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum PageIconType {
+  LUCIDE
+  EMOJI
+}
+
+enum SpaceIconType {
+  LUCIDE
+  EMOJI
+}
+
+// ─── Organization ─────────────────────────────────────
+
+model Organization {
+  id       String  @id @default(uuid())
+  name     String
+  slug     String  @unique
+  // IANA zone (common/time-zone.ts): instants are shown in it and "today" is computed in it.
+  timezone String  @default("UTC")
+  // Storage key of an upload (`organizations/<org>/uploads/…`); shown in the sidebar instead of the default icon.
+  logoUrl  String?
+  // Language for members who have not chosen one (before the instance default); one of SUPPORTED_LOCALES.
+  locale   String?
+
+  // Suspended by the instance superadmin: members cannot sign in.
+  isActive       Boolean     @default(true)
+  // Subset of InstanceSettings.availableModules enabled by the tenant admin.
+  enabledModules ModuleKey[] @default([KNOW, GROW, CONNECT, LIFE])
+
+  // Theme seeds of the organization (same rules as InstanceSettings); null = inherit the instance.
+  brandPrimary   String?
+  brandSecondary String?
+  fontKey        String?
+  radiusKey      String?
+  // Per-organization switch, changed only by the superadmin; the theme applies when this and the master switch are on.
+  themingEnabled Boolean @default(true)
+  // ADMINs must sign in with a second factor (an ADMIN of the organization sets it; audited).
+  requireAdminMfa Boolean @default(false)
+  // Members who are not ADMIN may change their own name, avatar, phone and bio (docs/specs/org/member-data).
+  memberProfileEditing Boolean @default(true)
+  // Main nodes isolate their people, structure and access (docs/specs/org/node-partitions); effective only with InstanceSettings.nodeIsolationAllowed.
+  isolateRootNodes     Boolean @default(false)
+
+  celebrationsEnabled Boolean @default(true)
+  showBirthdays       Boolean @default(true)
+  showAnniversaries   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     User[]
+  auditLogs AuditLog[]
+  posts     Post[]
+  spaces    Space[]
+  courses   Course[]
+  tags      Tag[]
+  orgNodes  OrgNode[]
+  positions Position[]
+}
+
+// ─── User ─────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String
+  firstName     String
+  lastName      String
+  role          UserRole  @default(COLLABORATOR)
+  isActive      Boolean   @default(true)
+  avatarUrl     String?
+  // One of SUPPORTED_LOCALES (common/locale.ts); null = the instance's default language.
+  locale        String?
+  // Instance-wide administrator (god mode). Independent of the tenant role.
+  isSuperAdmin  Boolean   @default(false)
+  // NULL = invitation pending (the user has not set a password yet).
+  passwordSetAt DateTime?
+  // Initial password (docs/specs/auth/access-without-mail): live until this instant; NULL when none was issued.
+  tempPasswordExpiresAt DateTime?
+  // Invitation waiting for the paced sender (MAIL_INVITES_PER_MINUTE); NULL when not queued.
+  inviteQueuedAt        DateTime?
+
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  // Employee code inside the organization (e.g. for compliance reports).
+  orgColaboratorId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ── Relationships
+  profile           UserProfile?
+  auditLogs         AuditLog[]
+  posts             Post[]
+  postLikes         PostLike[]
+  comments          PostComment[]
+  reactionsGiven    CelebrationReaction[] @relation("reactedBy")
+  reactionsReceived CelebrationReaction[] @relation("reactedTo")
+  authoredPages     Page[]                @relation("PageAuthor")
+  editedPages       Page[]                @relation("PageLastEditor")
+  pageVersions      PageVersion[]
+  notifications     Notification[]
+  documents         Document[]
+  documentVersions  DocumentVersion[]
+  managedOrgNodes   OrgNode[]             @relation("OrgNodeManager")
+  capabilities      UserCapability[]
+  spaceAccess       SpaceAccess[]
+  courseAssignments CourseAssignment[]
+  enrollments       Enrollment[]
+  certificates      Certificate[]
+  createdPositions  Position[]            @relation("PositionCreator")
+  authSessions      AuthSession[]
+  passwordLink      PasswordLink?
+  mfa               UserMfa?
+  mfaRecoveryCodes  MfaRecoveryCode[]
+  authChallenges    AuthChallenge[]
+
+  @@unique([organizationId, orgColaboratorId])
+}
+
+// ─── Org Chart & Positions (H2) ───────────────────────
+
+model OrgNode {
+  id                String             @id @default(uuid())
+  name              String
+  icon              String?
+  sortOrder         Int                @default(0)
+  parentId          String?
+  parent            OrgNode?           @relation("OrgTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children          OrgNode[]          @relation("OrgTree")
+  managerId         String?            @unique
+  manager           User?              @relation("OrgNodeManager", fields: [managerId], references: [id], onDelete: SetNull)
+  isActive          Boolean            @default(true)
+  organizationId    String
+  organization      Organization       @relation(fields: [organizationId], references: [id])
+  profiles          UserProfile[]
+  positions         Position[]
+  spaceAccess       SpaceAccess[]
+  courseAssignments CourseAssignment[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  archivedAt        DateTime?
+  code              String?
+  external          Boolean            @default(false)
+
+  @@unique([name, parentId, organizationId])
+  @@unique([organizationId, code])
+  @@index([organizationId, parentId])
+  @@index([organizationId, sortOrder])
+  @@index([organizationId, isActive])
+  @@map("org_nodes")
+}
+
+model Position {
+  id                String             @id @default(uuid())
+  name              String
+  description       String?            @db.VarChar(500)
+  color             String?            @db.VarChar(7)
+  isActive          Boolean            @default(true)
+  organizationId    String
+  organization      Organization       @relation(fields: [organizationId], references: [id])
+  orgNodeId         String?
+  orgNode           OrgNode?           @relation(fields: [orgNodeId], references: [id], onDelete: SetNull)
+  profiles          UserProfile[]
+  spaceAccess       SpaceAccess[]
+  courseAssignments CourseAssignment[]
+  createdById       String
+  createdBy         User               @relation("PositionCreator", fields: [createdById], references: [id])
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@unique([name, organizationId, orgNodeId])
+  @@index([organizationId, isActive])
+  @@index([organizationId, orgNodeId])
+  @@map("positions")
+}
+
+// ─── User Profile ─────────────────────────────────────
+
+model UserProfile {
+  id                  String    @id @default(uuid())
+  organizationId      String    @default(dbgenerated("app_org_id()"))
+  userId              String    @unique
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bio                 String?   @db.VarChar(500)
+  phone               String?
+  orgNodeId           String?
+  orgNode             OrgNode?  @relation(fields: [orgNodeId], references: [id], onDelete: SetNull)
+  positionId          String?
+  position            Position? @relation(fields: [positionId], references: [id], onDelete: SetNull)
+  showBirthday        Boolean   @default(true)
+  birthDate           DateTime?
+  joinedAt            DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  /// When orgNodeId or positionId last changed: anchor of relative LMS due dates.
+  assignmentChangedAt DateTime?
+
+  @@index([orgNodeId])
+  @@index([positionId])
+  @@map("user_profiles")
+}
+
+// ─── Celebrations ─────────────────────────────────────
+
+model CelebrationReaction {
+  id           String   @id @default(uuid())
+  organizationId String @default(dbgenerated("app_org_id()"))
+  userId       String
+  targetUserId String
+  type         String
+  emoji        String
+  createdAt    DateTime @default(now())
+
+  user       User @relation("reactedBy", fields: [userId], references: [id])
+  targetUser User @relation("reactedTo", fields: [targetUserId], references: [id])
+
+  @@unique([userId, targetUserId, type])
+  @@map("celebration_reactions")
+}
+
+// ─── CONNECT: Posts ───────────────────────────────────
+
+model Post {
+  id              String       @id @default(uuid())
+  type            PostType     @default(POST)
+  isPinned        Boolean      @default(false)
+  pinnedExpiresAt DateTime?
+  title           String?
+  body            String
+  excerpt         String?
+  images          String[]     @default([])
+  authorId        String
+  author          User         @relation(fields: [authorId], references: [id])
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  likes    PostLike[]
+  comments PostComment[]
+
+  @@index([organizationId, createdAt])
+  @@index([authorId])
+}
+
+model PostLike {
+  id        String   @id @default(uuid())
+  organizationId String @default(dbgenerated("app_org_id()"))
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([postId, userId])
+}
+
+model PostComment {
+  id        String   @id @default(uuid())
+  organizationId String @default(dbgenerated("app_org_id()"))
+  body      String
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([postId, createdAt])
+}
+
+// ─── Audit Log ────────────────────────────────────────
+
+model AuditLog {
+  id             String        @id @default(uuid())
+  actorId        String
+  action         String
+  entityType     String
+  entityId       String
+  oldValues      Json?
+  newValues      Json?
+  ipAddress      String?
+  userAgent      String?
+  // NULL = accion en contexto personal
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  actor          User          @relation(fields: [actorId], references: [id])
+  createdAt      DateTime      @default(now())
+
+  @@index([organizationId, createdAt(sort: Desc), id(sort: Desc)])
+  @@map("audit_log")
+}
+
+model UserCapability {
+  userId      String
+  organizationId String @default(dbgenerated("app_org_id()"))
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  capability  Capability
+  grantedById String
+  createdAt   DateTime   @default(now())
+
+  @@id([userId, capability])
+  @@map("user_capabilities")
+}
+
+// ─── KNOW: Spaces & Pages ─────────────────────────────
+
+model Space {
+  id                 String        @id @default(uuid())
+  name               String
+  icon               String        @default("book-open")
+  iconType           SpaceIconType @default(LUCIDE)
+  emoji              String?
+  descriptionContent Json?
+  // Yjs state of the live description (collab `know.space`), derived into descriptionContent.
+  // Omitted from every query by default (PrismaService); ask for it with `omit: { ydoc: false }`.
+  ydoc               Bytes?
+  ydocRevision       Int           @default(0)
+  // When true only ADMIN and the people in `access` can read the space; otherwise everyone in the organization can.
+  restricted         Boolean       @default(false)
+  organizationId     String
+  organization       Organization  @relation(fields: [organizationId], references: [id])
+  createdBy          String
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  pages              Page[]
+  access             SpaceAccess[]
+  documents          Document[]
+
+  @@index([organizationId])
+  @@map("spaces")
+}
+
+// Who may do what in a space. Each row points at exactly one principal (user, area or position).
+model SpaceAccess {
+  id          String     @id @default(uuid())
+  organizationId String  @default(dbgenerated("app_org_id()"))
+  spaceId     String
+  space       Space      @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  role        AccessRole
+  userId      String?
+  user        User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orgNodeId   String?
+  orgNode     OrgNode?   @relation(fields: [orgNodeId], references: [id], onDelete: Cascade)
+  positionId  String?
+  position    Position?  @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  createdById String
+  createdAt   DateTime   @default(now())
+
+  @@unique([spaceId, userId])
+  @@unique([spaceId, orgNodeId])
+  @@unique([spaceId, positionId])
+  @@index([userId])
+  @@index([orgNodeId])
+  @@index([positionId])
+  @@map("space_access")
+}
+
+model Page {
+  id             String        @id @default(uuid())
+  organizationId String        @default(dbgenerated("app_org_id()"))
+  title          String
+  content        Json          @default("{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\"}]}")
+  // Plain text of `content`, kept in sync on every write; what search matches against.
+  searchText     String        @default("")
+  status         PageStatus    @default(PUBLISHED)
+  order          Int           @default(0)
+  spaceId        String
+  space          Space         @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  parentId       String?
+  parent         Page?         @relation("PageHierarchy", fields: [parentId], references: [id])
+  children       Page[]        @relation("PageHierarchy")
+  iconType       PageIconType  @default(LUCIDE)
+  icon           String?
+  emoji          String?
+  authorId       String
+  author         User          @relation("PageAuthor", fields: [authorId], references: [id])
+  // Yjs document: source of truth while editing; content/title/searchText are derived copies.
+  // Omitted from every query by default (PrismaService); ask for it with `omit: { ydoc: false }`.
+  ydoc           Bytes?
+  ydocRevision   Int           @default(0)
+  lastEditedById String?
+  lastEditedBy   User?         @relation("PageLastEditor", fields: [lastEditedById], references: [id], onDelete: SetNull)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  publishedAt    DateTime?
+  versions       PageVersion[]
+  tags           PageTag[]
+  documents      Document[]
+
+  @@index([spaceId, parentId])
+  @@index([spaceId, order])
+  @@map("pages")
+}
+
+model PageVersion {
+  id        String   @id @default(uuid())
+  organizationId String @default(dbgenerated("app_org_id()"))
+  pageId    String
+  page      Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  title     String
+  content   Json
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  createdAt DateTime @default(now())
+  version   Int
+
+  @@unique([pageId, version])
+  @@index([pageId, createdAt(sort: Desc)])
+  @@map("page_versions")
+}
+
+// ─── Documents (transversal) ──────────────────────────
+
+// Belongs to a page or to a space, never both (CHECK constraint in the migration).
+model Document {
+  id               String            @id @default(uuid())
+  organizationId   String            @default(dbgenerated("app_org_id()"))
+  pageId           String?
+  page             Page?             @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  spaceId          String?
+  space            Space?            @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  name             String
+  currentVersionId String?           @unique
+  currentVersion   DocumentVersion?  @relation("CurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  versions         DocumentVersion[] @relation("DocumentVersions")
+  versionsCount    Int               @default(0)
+  createdById      String
+  createdBy        User              @relation(fields: [createdById], references: [id])
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([pageId, updatedAt(sort: Desc)])
+  @@index([spaceId, updatedAt(sort: Desc)])
+  @@map("documents")
+}
+
+model DocumentVersion {
+  id         String    @id @default(uuid())
+  organizationId String @default(dbgenerated("app_org_id()"))
+  documentId String
+  document   Document  @relation("DocumentVersions", fields: [documentId], references: [id], onDelete: Cascade)
+  version    Int
+  mimetype   String
+  size       Int
+  key        String
+  authorId   String
+  author     User      @relation(fields: [authorId], references: [id])
+  note       String?
+  createdAt  DateTime  @default(now())
+  currentOf  Document? @relation("CurrentVersion")
+
+  @@unique([documentId, version])
+  @@index([documentId, createdAt(sort: Desc)])
+  @@map("document_versions")
+}
+
+// ─── Tags ────────────────────────────────────────────
+
+model Tag {
+  id             String       @id @default(uuid())
+  name           String
+  slug           String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime     @default(now())
+  pages          PageTag[]
+
+  @@unique([name, organizationId])
+  @@unique([slug, organizationId])
+  @@map("tags")
+}
+
+model PageTag {
+  pageId String
+  organizationId String @default(dbgenerated("app_org_id()"))
+  page   Page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  tagId  String
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([pageId, tagId])
+  @@map("page_tags")
+}
+
+// ─── Notifications ────────────────────────────────────
+
+model Notification {
+  id        String    @id @default(uuid())
+  organizationId String @default(dbgenerated("app_org_id()"))
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String?
+  link      String?
+  payload   Json?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+// ─── GROW: LMS ────────────────────────────────────────
+
+enum CourseStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum StepType {
+  LESSON
+  QUIZ
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  PENDING_REVIEW
+  GRADED
+}
+
+// NOT_STARTED and OVERDUE are derived, never stored.
+enum EnrollmentStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+model Course {
+  id                String             @id @default(uuid())
+  organizationId    String
+  organization      Organization       @relation(fields: [organizationId], references: [id])
+  title             String
+  description       String?
+  icon              String             @default("graduation")
+  iconType          SpaceIconType      @default(LUCIDE)
+  emoji             String?
+  status            CourseStatus       @default(DRAFT)
+  // When true only the people an assignment reaches (and course managers) can see it.
+  restricted        Boolean            @default(false)
+  sequential        Boolean            @default(false)
+  issuesCertificate Boolean            @default(true)
+  createdById       String
+  // Set on the first publish and never cleared: a course that was ever published is archived, never deleted.
+  publishedAt       DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  sections          CourseSection[]
+  steps             CourseStep[]
+  assignments       CourseAssignment[]
+  enrollments       Enrollment[]
+  certificates      Certificate[]
+
+  @@index([organizationId, status])
+  @@map("courses")
+}
+
+model CourseSection {
+  id       String       @id @default(uuid())
+  organizationId String @default(dbgenerated("app_org_id()"))
+  courseId String
+  course   Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title    String
+  position Int
+  steps    CourseStep[]
+
+  @@index([courseId])
+  @@map("course_sections")
+}
+
+model CourseStep {
+  id              String         @id @default(uuid())
+  organizationId  String         @default(dbgenerated("app_org_id()"))
+  courseId        String
+  course          Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  sectionId       String
+  section         CourseSection  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  type            StepType
+  title           String
+  position        Int
+  required        Boolean        @default(true)
+  durationMinutes Int?
+  // Lesson or quiz content, validated at the boundary (lesson-content.ts, quiz-content.ts).
+  content         Json
+  progress        StepProgress[]
+  attempts        QuizAttempt[]
+
+  @@index([courseId])
+  @@index([sectionId])
+  @@map("course_steps")
+}
+
+// Who a course is assigned to. Each row points at exactly one principal (user, area with its sub-areas, or position).
+model CourseAssignment {
+  id          String    @id @default(uuid())
+  organizationId String @default(dbgenerated("app_org_id()"))
+  courseId    String
+  course      Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  mandatory   Boolean   @default(true)
+  dueAt       DateTime? @db.Date
+  dueInDays   Int?
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orgNodeId   String?
+  orgNode     OrgNode?  @relation(fields: [orgNodeId], references: [id], onDelete: Cascade)
+  positionId  String?
+  position    Position? @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  createdById String
+  createdAt   DateTime  @default(now())
+
+  @@unique([courseId, userId])
+  @@unique([courseId, orgNodeId])
+  @@unique([courseId, positionId])
+  @@index([userId])
+  @@index([orgNodeId])
+  @@index([positionId])
+  @@map("course_assignments")
+}
+
+// A learner's run through a course: created by Start or by opening a step, completed once (never reopened).
+model Enrollment {
+  id          String           @id @default(uuid())
+  organizationId String        @default(dbgenerated("app_org_id()"))
+  courseId    String
+  course      Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      EnrollmentStatus @default(IN_PROGRESS)
+  startedAt   DateTime         @default(now())
+  completedAt DateTime?
+  progress    StepProgress[]
+  attempts    QuizAttempt[]
+
+  @@unique([courseId, userId])
+  @@index([userId])
+  @@map("enrollments")
+}
+
+model StepProgress {
+  enrollmentId String
+  organizationId String @default(dbgenerated("app_org_id()"))
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  stepId       String
+  step         CourseStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  completedAt  DateTime   @default(now())
+
+  @@id([enrollmentId, stepId])
+  @@index([stepId])
+  @@index([organizationId])
+  @@map("step_progress")
+}
+
+// One try at a quiz. `questions` is the server's snapshot of what was drawn, answer key included: never sent to a learner as is.
+model QuizAttempt {
+  id           String        @id @default(uuid())
+  organizationId String      @default(dbgenerated("app_org_id()"))
+  enrollmentId String
+  enrollment   Enrollment    @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  stepId       String
+  step         CourseStep    @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  status       AttemptStatus @default(IN_PROGRESS)
+  questions    Json
+  // The pass mark when the attempt started; later edits of the quiz do not change it.
+  passScore    Int
+  answers      Json?
+  // Points given by a reviewer to each open question.
+  openScores   Json?
+  // Percent of the presented points, set once graded.
+  score        Float?
+  passed       Boolean?
+  startedAt    DateTime      @default(now())
+  submittedAt  DateTime?
+  gradedAt     DateTime?
+  gradedById   String?
+
+  @@index([enrollmentId, stepId])
+  @@index([stepId, status])
+  @@map("quiz_attempts")
+}
+
+// Issued once per learner and course when a course that issues certificates is completed. The names are
+// as written at issue time and never change; the PDF is rendered from this row on demand.
+model Certificate {
+  id               String   @id @default(uuid())
+  // 12 characters from a 32-symbol alphabet (certificate-code.ts), shown as ABCD-EFGH-JKLM.
+  code             String   @unique
+  organizationId   String
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
+  courseId         String
+  // Only never-published drafts are deleted, and they have no certificates: Restrict is a safety net.
+  course           Course   @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  recipientName    String
+  courseTitle      String
+  organizationName String
+  issuedAt         DateTime @default(now())
+  // The calendar date of issue in the organization's zone, kept as issued (printed on the certificate).
+  issuedOn         DateTime @db.Date
+
+  @@unique([courseId, userId])
+  @@index([userId])
+  @@map("certificates")
+}
+
+// ─── Instance (god mode) ──────────────────────────────
+
+// Single-row table (id = 1): settings of the whole installation, managed by superadmins.
+model InstanceSettings {
+  id                Int         @id @default(1)
+  name              String      @default("Cluster")
+  // false = private instance: only superadmins create organizations, no public sign-up.
+  // Closed by default: a new installation opens sign-up only when its superadmin decides to.
+  registrationOpen  Boolean     @default(false)
+  availableModules  ModuleKey[] @default([KNOW, GROW, CONNECT, LIFE])
+  // Language for people who have not chosen one; one of SUPPORTED_LOCALES (common/locale.ts).
+  defaultLocale     String      @default("en")
+  // Theme seeds (packages/theme): "#rrggbb" lowercase, FONT_KEYS, RADIUS_KEYS; null = the default.
+  brandPrimary      String?
+  brandSecondary    String?
+  fontKey           String?
+  radiusKey         String?
+  // Translucent menus and modals (docs/specs/org/glass): one of GLASS_KEYS (packages/theme); null = Off. Instance only.
+  glassKey          String?
+  // Master switch: false = organizations cannot set a theme of their own (changed only by the superadmin).
+  orgThemingAllowed Boolean     @default(false)
+  // Check new passwords against Have I Been Pwned (k-anonymity range API). Off by default: an
+  // instance may have no internet access (docs/specs/auth/hardening R-24).
+  passwordBreachCheck Boolean   @default(false)
+  // Master switch of node partitions (docs/specs/org/node-partitions): off = no organization may isolate its main nodes.
+  nodeIsolationAllowed Boolean  @default(false)
+  updatedAt         DateTime    @updatedAt
+
+  @@map("instance_settings")
+}
+
+// ─── Authentication state (docs/specs/auth/hardening) ───────────────────────
+// Not tenant tables: no organizationId, and cluster_app has no privilege on them
+// (the migration revokes it). Only the auth services touch them, on the system client.
+
+/// One sign-in on one device; its id is the `sid` of the access and file tokens.
+model AuthSession {
+  id                  String    @id @default(uuid())
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// SHA-256 of the current refresh secret.
+  refreshHash         String    @unique
+  /// The previous one, accepted again only within the grace window after a rotation.
+  previousRefreshHash String?   @unique
+  rotatedAt           DateTime?
+  /// Limits the session was born with (superadmin or person).
+  superAdmin          Boolean
+  createdAt           DateTime  @default(now())
+  lastUsedAt          DateTime  @default(now())
+  idleExpiresAt       DateTime
+  absoluteExpiresAt   DateTime
+  revokedAt           DateTime?
+  revokeReason        String?
+  userAgent           String?
+  ipAddress           String?
+
+  @@index([userId, revokedAt])
+  @@map("auth_sessions")
+}
+
+/// Invitation and password-reset links: one live link per person, stored as a hash.
+model PasswordLink {
+  tokenHash String   @id
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// INVITE | RESET
+  purpose   String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("password_links")
+}
+
+/// Authentication events. A failed sign-in may have no person, so this is not audit_log.
+model AuthEvent {
+  id        String   @id @default(uuid())
+  type      String
+  userId    String?
+  /// SHA-256 of the normalized email, for attempts on an unknown account.
+  emailHash String?
+  sessionId String?
+  ipAddress String?
+  userAgent String?
+  /// Reason and context; never passwords or tokens.
+  detail    Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("auth_events")
+}
+
+/// Failed sign-in counters (docs/specs/auth/hardening R-25 to R-27): "email:<sha256>" per account,
+/// whether it exists or not, and "ip:<address>" per address.
+model LoginThrottle {
+  key         String    @id
+  failures    Int       @default(0)
+  windowStart DateTime  @default(now())
+  lockedUntil DateTime?
+  lockLevel   Int       @default(0)
+  lastLockAt  DateTime?
+  /// Keyed hashes of the last wrong passwords (account rows only), so a repeated typo does not count.
+  recentWrong String[]  @default([])
+
+  @@map("login_throttle")
+}
+
+/// TOTP second factor (docs/specs/auth/hardening D-04). The secret is AES-256-GCM encrypted with a key
+/// derived from AUTH_SECRET_KEY.
+model UserMfa {
+  userId      String    @id
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// iv.tag.ciphertext, base64url.
+  secretBox   String
+  /// null = enrollment started, not confirmed with a code yet.
+  confirmedAt DateTime?
+  /// Last accepted TOTP time step: a code is never accepted twice.
+  lastStep    Int?
+  createdAt   DateTime  @default(now())
+  /// A new device being set up while 2FA stays on (sealed like secretBox); replaces it once confirmed.
+  pendingSecretBox String?
+  pendingAt        DateTime?
+
+  @@map("user_mfa")
+}
+
+/// Single-use recovery codes, stored as SHA-256 (they are random, 50 bits).
+model MfaRecoveryCode {
+  id       String    @id @default(uuid())
+  userId   String
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash String    @unique
+  usedAt   DateTime?
+
+  @@index([userId])
+  @@map("mfa_recovery_codes")
+}
+
+/// The short step between a correct password and the second factor: 5 minutes, one use, 5 tries.
+model AuthChallenge {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// VERIFY (enter a code) | ENROLL (set up 2FA before getting a session)
+  purpose   String
+  attempts  Int       @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  userAgent String?
+  ipAddress String?
+
+  @@index([userId])
+  @@map("auth_challenges")
+}

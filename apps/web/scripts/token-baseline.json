@@ -1,0 +1,60 @@
+{
+  "app/(app)/know/search/page.tsx": {
+    "pixelText": 1
+  },
+  "components/connect/celebrations-banner.tsx": {
+    "loader": 2
+  },
+  "components/connect/inline-comments.tsx": {
+    "pixelText": 1,
+    "loader": 2
+  },
+  "components/connect/post-detail-dialog.tsx": {
+    "palette": 5,
+    "pixelText": 2,
+    "loader": 2
+  },
+  "components/know/create-space-dialog.tsx": {
+    "loader": 2
+  },
+  "components/know/import-markdown-dialog.tsx": {
+    "loader": 2
+  },
+  "components/know/page-tags-editor.tsx": {
+    "pixelText": 1
+  },
+  "components/know/page/page-versions-sheet.tsx": {
+    "palette": 3
+  },
+  "components/nav-main.tsx": {
+    "pixelText": 2
+  },
+  "components/settings/profile-panel.tsx": {
+    "loader": 2
+  },
+  "components/shared/collab/connection-status.tsx": {
+    "palette": 4
+  },
+  "components/shared/collab/presence-avatars.tsx": {
+    "pixelText": 1
+  },
+  "components/shared/color-canvas.tsx": {
+    "hex": 9
+  },
+  "components/shared/color-picker.tsx": {
+    "hex": 14
+  },
+  "components/shared/module-card.tsx": {
+    "palette": 21
+  },
+  "components/shared/password-input.tsx": {
+    "palette": 6
+  },
+  "components/shared/saving-indicator.tsx": {
+    "palette": 4,
+    "loader": 2
+  },
+  "components/ui/chart.tsx": {
+    "hex": 5
+  }
+}

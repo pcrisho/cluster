@@ -1,0 +1,72 @@
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
+services:
+  postgres:
+    image: postgres:16.15-alpine
+    container_name: cluster-postgres-dev
+    logging: *logging
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cluster}
+      POSTGRES_USER: ${POSTGRES_USER:-cluster}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cluster}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cluster} -d ${POSTGRES_DB:-cluster}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: cluster-redis-dev
+    logging: *logging
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  storage:
+    image: chrislusf/seaweedfs:4.48
+    container_name: cluster-storage-dev
+    logging: *logging
+    entrypoint: ["/bin/sh", "/start.sh"]
+    ports:
+      - "${STORAGE_PORT:-9000}:8333"
+      - "${STORAGE_MASTER_PORT:-9333}:9333"
+    environment:
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY:-cluster-storage}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:-cluster-storage-secret}
+    volumes:
+      - storage-data:/data
+      - ./docker/storage/start.sh:/start.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -S -O /dev/null http://127.0.0.1:8333/ 2>&1 | grep -Eq 'HTTP/[0-9.]+ (200|403|404)'"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Catches every email sent in development and tests. Inbox UI: http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.31.4
+    container_name: cluster-mailpit-dev
+    logging: *logging
+    ports:
+      - "${SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+
+volumes:
+  postgres-data:
+  redis-data:
+  storage-data:

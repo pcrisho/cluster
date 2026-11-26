@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, dev]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # The API and web images use Node 24 (collab's, 22); engines is >=22.
+  NODE_VERSION: "24"
+  SHARP_IGNORE_GLOBAL_LIBVIPS: "1"
+
+jobs:
+  check:
+    name: typecheck, lint, unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the docs' changelog check needs the release tags
+      # pnpm's version comes from "packageManager" in package.json
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Create .env
+        run: |
+          cp .env.example .env
+          sed -i "s|^COLLAB_INTERNAL_SECRET=.*|COLLAB_INTERNAL_SECRET=$(openssl rand -hex 32)|" .env
+          sed -i "s|^AUTH_SECRET_KEY=.*|AUTH_SECRET_KEY=$(openssl rand -hex 32)|" .env
+      # The packages' dist/ and the Prisma client do not exist on a fresh clone
+      - run: pnpm --filter @cluster/editor-schema build
+      - run: pnpm --filter @cluster/theme build
+      - run: pnpm --filter @cluster/api exec prisma generate
+      - run: pnpm typecheck
+      # Includes the token guard, the module dependency rule and the system-client allow list
+      - run: pnpm lint
+      - run: pnpm test
+
+  e2e:
+    name: e2e (API, real Postgres, Redis, storage, Mailpit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Only secrets that must not be empty; every other variable keeps its .env.example default.
+      # The roles' passwords (cluster_app and any later one) come from .env.example too.
+      - name: Create .env
+        run: |
+          cp .env.example .env
+          sed -i "s|^COLLAB_INTERNAL_SECRET=.*|COLLAB_INTERNAL_SECRET=$(openssl rand -hex 32)|" .env
+          sed -i "s|^AUTH_SECRET_KEY=.*|AUTH_SECRET_KEY=$(openssl rand -hex 32)|" .env
+      - run: docker compose -f docker-compose.dev.yml up -d --wait
+      - run: pnpm --filter @cluster/editor-schema build
+      - run: pnpm --filter @cluster/theme build
+      - run: pnpm --filter @cluster/api exec prisma generate
+      - run: pnpm --filter @cluster/api db:roles
+      # Drops, recreates, migrates and seeds <db>_test, then runs the whole suite (RLS specs included)
+      - run: pnpm test:e2e
+      - name: Compose logs
+        if: failure()
+        run: docker compose -f docker-compose.dev.yml logs --no-color --tail 200
+
+  security:
+    name: secrets and dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # gitleaks scans the whole history
+      # The CLI from its image: the action needs a paid licence for organization repositories.
+      - name: gitleaks
+        run: >
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.0
+          detect --source /repo -c /repo/.github/gitleaks.toml --redact --no-banner
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - name: pnpm audit (blocking at critical)
+        run: pnpm audit --prod --audit-level=critical
+      # High stays report only: decode-uri-component (via minio, stringify only) has no CommonJS fix.
+      - name: pnpm audit (high, report only)
+        continue-on-error: true
+        run: pnpm audit --prod --audit-level=high
+
+  images:
+    name: image ${{ matrix.image }} (build and Trivy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [api, web, collab]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # A failed build fails the job
+      - run: docker build -f docker/Dockerfile.${{ matrix.image }} -t cluster-${{ matrix.image }}:ci .
+      # Report only (exit-code 0): switch to "1" once the first findings are fixed or accepted.
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: cluster-${{ matrix.image }}:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"

@@ -1,0 +1,23 @@
+node_modules/
+dist/
+.next/
+out/
+*.log
+.env
+.env.local
+.turbo/
+coverage/
+*.tsbuildinfo
+.opencode.bak/
+
+# codebase-memory MCP index (regenerated locally)
+.codebase-memory/
+
+# Playwright MCP screenshots/snapshots
+.playwright-mcp/
+
+# Superpowers brainstorm server state (holds a session token and pids; sdd/ ignores itself)
+.superpowers/brainstorm/
+
+# Obsidian vault settings (local to each machine)
+.obsidian/

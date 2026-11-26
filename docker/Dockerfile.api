@@ -1,0 +1,45 @@
+FROM node:24-alpine AS base
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+WORKDIR /app
+
+FROM base AS deps
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY apps/api/package.json ./apps/api/
+COPY apps/web/package.json ./apps/web/
+COPY packages/editor-schema/package.json ./packages/editor-schema/
+COPY packages/theme/package.json ./packages/theme/
+RUN pnpm install --frozen-lockfile --filter @cluster/api... --filter @cluster/editor-schema --filter @cluster/theme
+
+FROM base AS builder
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
+COPY --from=deps /app/packages/editor-schema/node_modules ./packages/editor-schema/node_modules
+COPY --from=deps /app/packages/theme/node_modules ./packages/theme/node_modules
+COPY . .
+RUN pnpm --filter @cluster/editor-schema build && pnpm --filter @cluster/theme build && pnpm --filter @cluster/api exec prisma generate && pnpm --filter @cluster/api build
+
+# shortcut: ships the full (dev included) node_modules; the Prisma CLI is needed at
+# the compose `migrate` service (`migrate deploy`). Switch to `pnpm deploy --prod` if image size matters.
+FROM node:24-alpine AS runner
+ENV NODE_ENV=production
+RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nestjs
+WORKDIR /app
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/apps/api/node_modules ./apps/api/node_modules
+COPY --from=builder /app/apps/api/package.json /app/apps/api/prisma.config.ts ./apps/api/
+COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
+COPY --from=builder /app/apps/api/dist ./apps/api/dist
+# Fonts embedded in certificate PDFs (resolved from dist/modules/grow).
+COPY --from=builder /app/apps/api/assets ./apps/api/assets
+COPY --from=builder /app/packages/editor-schema/package.json ./packages/editor-schema/package.json
+COPY --from=builder /app/packages/editor-schema/dist ./packages/editor-schema/dist
+COPY --from=builder /app/packages/editor-schema/node_modules ./packages/editor-schema/node_modules
+COPY --from=builder /app/packages/theme/package.json ./packages/theme/package.json
+COPY --from=builder /app/packages/theme/dist ./packages/theme/dist
+COPY --from=builder /app/packages/theme/node_modules ./packages/theme/node_modules
+USER nestjs
+WORKDIR /app/apps/api
+EXPOSE 3001
+# The API only starts. Roles and migrations run in the compose `migrate` service (the owner's credentials
+# live only there): `node dist/db-roles.js && npx prisma migrate deploy`.
+CMD ["node", "dist/main"]
