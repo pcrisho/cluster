@@ -9,7 +9,6 @@ export function isolationBlock(
   enabledModules: readonly ModuleKey[]
 ): "instance" | "modules" | null {
   if (!isolation.allowed) return "instance"
-  if (enabledModules.includes("CONNECT") || enabledModules.includes("LIFE"))
-    return "modules"
+  if (enabledModules.includes("LIFE")) return "modules"
   return null
 }

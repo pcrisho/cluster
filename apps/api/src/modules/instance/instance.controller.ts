@@ -24,6 +24,12 @@ export class InstanceController {
   }
 
   @SuperAdminOnly()
+  @Get("status")
+  getSystemStatus() {
+    return this.instanceService.getSystemStatus()
+  }
+
+  @SuperAdminOnly()
   @Patch("settings")
   updateSettings(@Actor() actor: ActorContext, @Body() dto: UpdateInstanceSettingsDto) {
     return this.instanceService.updateSettings(actor, dto)

@@ -5,6 +5,8 @@ import { toast } from "sonner"
 
 import { useAuth } from "@/lib/auth-context"
 import { connectApi, type Post } from "@/lib/connect-api"
+import { orgApi, type Principal } from "@/lib/org-api"
+import { isCrosser } from "@/lib/partition"
 import { announcementSchema } from "@/lib/validations"
 import {
   extractPlainTextFromContent,
@@ -28,6 +30,7 @@ import {
   type PostMode,
   type PendingAction,
 } from "@/components/connect/post-composer-fields"
+import { PostAudienceField } from "@/components/connect/post-audience-field"
 import { getErrorMessage } from "@/lib/api"
 import { useTranslations } from "next-intl"
 
@@ -63,6 +66,8 @@ export function PostDialog({
   const t = useTranslations("connect.composer")
   const { user } = useAuth()
   const isEdit = !!post
+  const isolated = user?.organization.isolated ?? false
+  const crosser = isCrosser(user)
 
   const [internalOpen, setInternalOpen] = useState(false)
   const open = controlledOpen ?? internalOpen
@@ -71,6 +76,11 @@ export function PostDialog({
   const [title, setTitle] = useState(post?.title ?? "")
   const [body, setBody] = useState(post?.body ?? "")
   const [images, setImages] = useState<string[]>(post?.images ?? [])
+  const [restricted, setRestricted] = useState(
+    post ? post.restricted : isolated
+  )
+  const [audience, setAudience] = useState<Principal[]>(post?.audience ?? [])
+  const [noArea, setNoArea] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isPinned, setIsPinned] = useState(post?.isPinned ?? false)
   const [pinnedExpiresAt, setPinnedExpiresAt] = useState(
@@ -94,29 +104,74 @@ export function PostDialog({
       setTitle(post.title ?? "")
       setBody(post.body)
       setImages(post.images)
+      setRestricted(post.restricted)
+      setAudience(post.audience ?? [])
+      setNoArea(false)
       setIsPinned(post.isPinned)
       setPinnedExpiresAt(post.pinnedExpiresAt ?? "")
     } else {
       setTitle("")
       setBody("")
       setImages([])
+      setRestricted(isolated)
+      setAudience([])
+      setNoArea(false)
       setIsPinned(false)
       setPinnedExpiresAt("")
     }
     setIsSubmitting(false)
-  }, [isEdit, post])
+  }, [isEdit, post, isolated])
 
   const prevOpenRef = useRef(open)
   useEffect(() => {
     const wasOpen = prevOpenRef.current
-    if (!open && wasOpen) {
-      resetForm()
-    }
-    if (open && !wasOpen && !isEdit && initialType) {
-      setIsPinned(initialType === "ANNOUNCEMENT")
-    }
     prevOpenRef.current = open
-  }, [open, initialType, isEdit, resetForm])
+    if (!open && wasOpen) {
+      queueMicrotask(resetForm)
+      return
+    }
+    if (open && !wasOpen) {
+      queueMicrotask(() => {
+        if (!isEdit) {
+          setRestricted(isolated)
+          setAudience([])
+          setNoArea(false)
+          if (initialType) setIsPinned(initialType === "ANNOUNCEMENT")
+        } else if (post) {
+          setRestricted(post.restricted)
+          setAudience(post.audience ?? [])
+        }
+      })
+    }
+  }, [open, initialType, isEdit, post, isolated, resetForm])
+
+  // Under isolation, non-crossers start with their own main node pre-selected.
+  useEffect(() => {
+    if (!open || isEdit || !isolated || crosser) return
+    let cancelled = false
+    orgApi
+      .getAreas()
+      .then((res) => {
+        if (cancelled) return
+        const root = res.data.find((n) => n.parentId === null)
+        if (root) {
+          setAudience((prev) =>
+            prev.length > 0
+              ? prev
+              : [{ type: "ORG_NODE", id: root.id, name: root.name, main: true }]
+          )
+          setNoArea(false)
+        } else {
+          setNoArea(true)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setNoArea(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, isEdit, isolated, crosser])
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -149,6 +204,10 @@ export function PostDialog({
           type: (isPinned ? "ANNOUNCEMENT" : "POST") as "POST" | "ANNOUNCEMENT",
           isPinned,
           pinnedExpiresAt: pinnedExpiresAt || undefined,
+          restricted,
+          audience: restricted
+            ? audience.map(({ type, id }) => ({ type, id }))
+            : undefined,
         }
 
         if (isEdit && post) {
@@ -173,6 +232,8 @@ export function PostDialog({
       title,
       body,
       images,
+      restricted,
+      audience,
       isPinned,
       pinnedExpiresAt,
       isEdit,
@@ -185,6 +246,8 @@ export function PostDialog({
   )
 
   const bodyEmpty = isBodyEmpty(body)
+  const audienceMissing =
+    restricted && audience.length === 0 && !(isEdit && (post?.hiddenAudienceCount ?? 0) > 0)
 
   const dialogContent = (
     <DialogContent className="flex max-h-[calc(100dvh-2rem)] min-h-[min(24rem,calc(100dvh-2rem))] w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-xl">
@@ -227,6 +290,15 @@ export function PostDialog({
         className="flex min-h-0 flex-1 flex-col overflow-y-auto"
       >
         <div className="flex min-h-0 flex-1 flex-col p-4">
+          <PostAudienceField
+            restricted={restricted}
+            onRestrictedChange={setRestricted}
+            audience={audience}
+            onAudienceChange={setAudience}
+            hiddenAudienceCount={isEdit ? post?.hiddenAudienceCount : 0}
+            noArea={noArea}
+            disabled={isSubmitting}
+          />
           <PostComposerFields
             open={open}
             postMode={postMode}
@@ -260,7 +332,10 @@ export function PostDialog({
           >
             {tc("cancel")}
           </Button>
-          <Button type="submit" disabled={isSubmitting || bodyEmpty}>
+          <Button
+            type="submit"
+            disabled={isSubmitting || bodyEmpty || audienceMissing}
+          >
             {isSubmitting && (
               <Spinner data-icon="inline-start" className="size-4" />
             )}

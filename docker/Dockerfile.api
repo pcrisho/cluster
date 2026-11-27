@@ -1,5 +1,5 @@
-FROM node:24-alpine AS base
-RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+FROM node:24.22.3-alpine AS base
+RUN corepack enable && corepack prepare pnpm@10.34.9 --activate
 WORKDIR /app
 
 FROM base AS deps
@@ -20,7 +20,7 @@ RUN pnpm --filter @cluster/editor-schema build && pnpm --filter @cluster/theme b
 
 # shortcut: ships the full (dev included) node_modules; the Prisma CLI is needed at
 # the compose `migrate` service (`migrate deploy`). Switch to `pnpm deploy --prod` if image size matters.
-FROM node:24-alpine AS runner
+FROM node:24.22.3-alpine AS runner
 ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nestjs
 WORKDIR /app

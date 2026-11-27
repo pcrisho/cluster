@@ -41,6 +41,7 @@ import { Separator } from "@/components/ui/separator"
 import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
 import { PostBody } from "@/components/connect/post-body"
+import { PostAudienceBadge } from "@/components/connect/post-audience-badge"
 import { useDates } from "@/lib/i18n/use-dates"
 import { useTranslations } from "next-intl"
 
@@ -299,6 +300,9 @@ export function PostDetailDialog({
           {/* Scrollable Content & Comments List */}
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-muted/5 p-4">
             <div>
+              <div className="mb-2 flex flex-wrap items-center gap-1.5 empty:hidden">
+                <PostAudienceBadge post={post} />
+              </div>
               <p className="text-base font-bold text-foreground">
                 {post.title ?? t("post")}
               </p>

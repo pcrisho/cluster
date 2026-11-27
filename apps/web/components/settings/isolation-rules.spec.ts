@@ -7,10 +7,10 @@ describe("isolationBlock", () => {
     )
   })
 
-  it("blocks while CONNECT or LIFE is enabled in the organization", () => {
-    expect(isolationBlock({ allowed: true }, ["KNOW", "CONNECT"])).toBe(
-      "modules"
-    )
+  it("blocks while LIFE is enabled in the organization, allowing CONNECT", () => {
+    expect(
+      isolationBlock({ allowed: true }, ["KNOW", "GROW", "CONNECT"])
+    ).toBeNull()
     expect(isolationBlock({ allowed: true }, ["LIFE"])).toBe("modules")
   })
 

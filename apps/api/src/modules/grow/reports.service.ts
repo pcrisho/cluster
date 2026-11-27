@@ -15,6 +15,7 @@ import { translate, type MessageKey } from "../../i18n/translate";
 import { dateIn, todayIn } from "./due-date";
 import type { ReportQuery } from "./dto/report.dto";
 import { dashboardOf } from "./report-dashboard";
+import { complianceByMainNode } from "./report-main-nodes";
 import { subtreeOf } from "../org/org-tree";
 import { reportScope } from "./report-scope";
 import { progressOf } from "./step-order";
@@ -59,6 +60,14 @@ export class ReportsService {
     return { ...dashboardOf(rows, today, timeZone), filters };
   }
 
+  /** Mandatory-course compliance aggregated per active main node in the caller's scope. */
+  async byMainNode(user: AuthenticatedUser) {
+    const { rows, parentOf, activeMainNodeIds } = await this.rows(user, {});
+    return {
+      items: complianceByMainNode(rows, activeMainNodeIds, parentOf),
+    };
+  }
+
   /** In the downloader's language; dates stay ISO (YYYY-MM-DD, completion in the organization's zone) so spreadsheets sort them. */
   async exportCsv(user: AuthenticatedUser, query: ReportQuery) {
     const { rows, timeZone } = await this.rows(user, query);
@@ -100,7 +109,13 @@ export class ReportsService {
     const [nodes, org, positions] = await Promise.all([
       this.prisma.orgNode.findMany({
         where: { organizationId: orgId },
-        select: { id: true, parentId: true, name: true, managerId: true },
+        select: {
+          id: true,
+          parentId: true,
+          name: true,
+          managerId: true,
+          isActive: true,
+        },
       }),
       this.prisma.organization.findUniqueOrThrow({
         where: { id: orgId },
@@ -280,6 +295,15 @@ export class ReportsService {
       summary,
       today,
       timeZone: org.timezone,
+      parentOf,
+      activeMainNodeIds: nodes
+        .filter(
+          (n) =>
+            n.isActive &&
+            n.parentId === null &&
+            (scope.all || scope.nodeIds.has(n.id)),
+        )
+        .map((n) => n.id),
       filters: {
         courses: scopedCourses
           .map((course) => ({

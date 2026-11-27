@@ -343,4 +343,41 @@ describe("Instance (god mode), tenant admin and invitations e2e", () => {
       memberCount: 2,
     });
   });
+
+  it("GET /instance/status returns system status only to superadmins", async () => {
+    const plainAdmin = await prisma.user.create({
+      data: {
+        email: `status-admin-${ts}@x.com`,
+        passwordHash: "x",
+        firstName: "Status",
+        lastName: "Admin",
+        role: "ADMIN",
+        organizationId: superOrgId,
+      },
+    });
+    const plainToken = await signToken(app, plainAdmin.id);
+
+    await http.get("/api/v1/instance/status").expect(401);
+    await http
+      .get("/api/v1/instance/status")
+      .set(auth(plainToken))
+      .expect(403);
+
+    const res = await http
+      .get("/api/v1/instance/status")
+      .set(auth(superToken))
+      .expect(200);
+    expect(res.body).toMatchObject({
+      status: expect.stringMatching(/^(ok|degraded|down)$/),
+      checkedAt: expect.any(String),
+      uptimeSeconds: expect.any(Number),
+      mailEnabled: expect.any(Boolean),
+      checks: {
+        database: "ok",
+        redis: expect.stringMatching(/^(ok|down)$/),
+        storage: "ok",
+        collab: expect.stringMatching(/^(ok|down|unconfigured)$/),
+      },
+    });
+  });
 });

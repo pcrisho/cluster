@@ -200,8 +200,10 @@
       "DATE_IN_FUTURE": "The date can't be in the future.",
       "ISOLATION_NOT_ALLOWED": "The instance doesn't allow isolating main nodes. Ask the instance administrator.",
       "ISOLATION_IN_USE": "Some organizations still isolate their main nodes. Turn that off in each of them first.",
-      "ISOLATION_MODULES": "Turn off CONNECT and LIFE before isolating the main nodes.",
+      "ISOLATION_MODULES": "Turn off LIFE before isolating the main nodes.",
       "ISOLATION_OPEN_SPACE": "Only people who see every main node (administrators, moderators and course managers) can open a space to all of them.",
+      "ISOLATION_OPEN_POST": "Only people who see every main node (administrators, moderators and course managers) can publish to all of them.",
+      "POST_AUDIENCE_REQUIRED": "Choose at least one person, area or position for this post.",
       "NODE_REQUIRED": "While main nodes are isolated, each collaborator needs an area.",
       "MANAGER_OTHER_PARTITION": "The manager of an area must belong to the same main node as the area.",
       "NODE_CODE_TAKEN": "Another area already uses that code.",
@@ -216,7 +218,8 @@
       "IMPORT_UNREADABLE": "This file can't be read as an Excel workbook (.xlsx).",
       "IMPORT_HEADERS": "The header row doesn't match the template. Download the template and keep its column names.",
       "IMPORT_INVALID": "The file has errors, so nothing was imported.",
-      "IMPORT_CONFLICT": "The data changed while the import was running. Nothing was imported; the file is checked again."
+      "IMPORT_CONFLICT": "The data changed while the import was running. Nothing was imported; the file is checked again.",
+      "LESSON_FILE_IN_USE": "A file already belongs to another lesson."
     }
   },
   "timeZonePicker": {
@@ -538,7 +541,11 @@
       "kind": "Kind",
       "internal": "Internal",
       "external": "External",
-      "editMain": "Edit main node"
+      "editMain": "Edit main node",
+      "compliance": "Compliance",
+      "noMandatoryCourses": "No mandatory courses",
+      "overdueCount": "{count, plural, one {# overdue} other {# overdue}}",
+      "viewReport": "View compliance report"
     },
     "areaTree": {
       "drag": "Move “{name}”",
@@ -709,11 +716,11 @@
         "title": "Main nodes",
         "description": "Main nodes are the top-level areas of the organization chart.",
         "label": "Isolate main nodes",
-        "hint": "Each main node sees only its own people, areas and positions. Spaces and courses that are not restricted stay visible to every main node.",
+        "hint": "Each main node sees only its own people, areas and positions. Spaces, courses and posts that are not restricted stay visible to every main node.",
         "blockedInstance": "The instance doesn't allow isolation. Ask the instance administrator to allow it.",
-        "blockedModules": "Turn off CONNECT and LIFE first. They cannot run isolated.",
+        "blockedModules": "Turn off LIFE first. It cannot run isolated.",
         "onTitle": "Isolate the main nodes?",
-        "onBody": "Spaces and courses that are not restricted stay visible to every main node.",
+        "onBody": "Spaces, courses and posts that are not restricted stay visible to every main node.",
         "withoutNode": "{count, plural, one {# active person has no main node and will see nobody.} other {# active people have no main node and will see nobody.}}",
         "onConfirm": "Isolate",
         "offTitle": "Stop isolating the main nodes?",
@@ -962,6 +969,7 @@
       "sortBy": "Sort by",
       "sortName": "Name",
       "sortPeople": "Most people",
+      "sortCompliance": "Lowest compliance",
       "noMatch": "No main node matches your search.",
       "name": "Name",
       "code": "Code",
@@ -969,6 +977,10 @@
       "manager": "Manager",
       "people": "People",
       "areas": "Areas",
+      "compliance": "Compliance",
+      "complianceTooltip": "{completed} of {total} mandatory courses completed",
+      "complianceTooltipOverdue": "{completed} of {total} completed · {overdue, plural, one {# overdue} other {# overdue}}",
+      "viewReport": "View report",
       "noManager": "No manager",
       "peopleCount": "{count, plural, one {# person} other {# people}}"
     },
@@ -1114,6 +1126,37 @@
       "label": "Allow main-node isolation",
       "hint": "When on, an organization can isolate its main nodes: each one sees only its own people and structure. Turning this off is refused while any organization still isolates.",
       "isolated": "Isolated"
+    },
+    "systemStatus": {
+      "title": "System status",
+      "description": "Live health of core services. Configure external alerts and scheduled backups on the host.",
+      "refresh": "Refresh",
+      "refreshing": "Checking…",
+      "loadError": "Could not load system status.",
+      "retry": "Try again",
+      "overall": {
+        "ok": "All systems operational",
+        "degraded": "Degraded",
+        "down": "Unavailable"
+      },
+      "states": {
+        "ok": "Healthy",
+        "down": "Down",
+        "unconfigured": "Not configured",
+        "mailOn": "Configured",
+        "mailOff": "Mail off"
+      },
+      "services": {
+        "database": "PostgreSQL",
+        "redis": "Redis",
+        "storage": "Object storage",
+        "collab": "Realtime editing",
+        "mail": "Email (SMTP)"
+      },
+      "collabMetrics": "{documents, plural, one {# open document} other {# open documents}}, {connections, plural, one {# connection} other {# connections}}",
+      "uptime": "API uptime: {uptime}",
+      "checkedAt": "Checked {time}",
+      "healthHint": "Public endpoint: /api/v1/health"
     }
   },
   "shell": {
@@ -2467,7 +2510,11 @@
       "like": "Like ({count})",
       "commentsCount": "Comments ({count})",
       "noCommentsInline": "No comments yet. Be the first!",
-      "commentActions": "Comment actions"
+      "commentActions": "Comment actions",
+      "visibleToEveryMainNode": "Visible to every main node",
+      "audienceRestricted": "Specific audience",
+      "audienceHiddenOnly": "{count, plural, one {# hidden entry} other {# hidden entries}}",
+      "audienceNamesMore": "{names} +{count}"
     },
     "profile": {
       "back": "Back to directory",
@@ -2515,7 +2562,16 @@
       "createDescription": "Share something with your organization",
       "publishing": "Publishing…",
       "publish": "Publish",
-      "placeholder": "What do you want to talk about?"
+      "placeholder": "What do you want to talk about?",
+      "audienceLabel": "Audience",
+      "audienceEveryone": "Everyone",
+      "audienceAllMainNodes": "All main nodes",
+      "audienceSpecific": "Specific audience",
+      "audienceOpenHint": "Visible to every main node in the organization.",
+      "audienceNoArea": "While main nodes are isolated, you need an assigned area to publish.",
+      "audienceSelected": "Selected",
+      "removeAudience": "Remove {name}",
+      "hiddenAudience": "{count, plural, one {# entry in another main node is hidden} other {# entries in other main nodes are hidden}}"
     },
     "directory": {
       "title": "Directory",

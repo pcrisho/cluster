@@ -12,19 +12,19 @@ export class CommentsController {
 
   @Throttle({ default: { limit: 300, ttl: 60000 } })
   @Get("posts/:id/comments")
-  list(@Param("id") postId: string, @CurrentUser("orgId") orgId: string) {
-    return this.comments.list(postId, orgId)
+  list(@Param("id") postId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.comments.list(postId, user)
   }
 
   @Throttle({ default: { limit: 60, ttl: 60000 } })
   @Post("posts/:id/comments")
   create(@Param("id") postId: string, @Body() dto: CreateCommentDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.comments.create(postId, dto, user.id, user.orgId)
+    return this.comments.create(postId, dto, user)
   }
 
   @Throttle({ default: { limit: 60, ttl: 60000 } })
   @Delete("comments/:id")
   remove(@Param("id") id: string, @CurrentUser() user: AuthenticatedUser) {
-    return this.comments.remove(id, user.id, user.orgId, user.role)
+    return this.comments.remove(id, user)
   }
 }

@@ -1,5 +1,5 @@
 import { api, type UserRole } from "./api"
-import type { ManagerRef, OrgNodeRef, PositionRef } from "./org-api"
+import type { ManagerRef, OrgNodeRef, PositionRef, Principal, PrincipalType } from "./org-api"
 
 export interface Author {
   id: string
@@ -27,6 +27,9 @@ export interface Post {
   body: string
   excerpt: string | null
   images: string[]
+  restricted: boolean
+  audience: Principal[]
+  hiddenAudienceCount?: number
   authorId: string
   createdAt: string
   updatedAt: string
@@ -60,6 +63,8 @@ export interface CreatePostData {
   type?: "POST" | "ANNOUNCEMENT"
   isPinned?: boolean
   pinnedExpiresAt?: string
+  restricted?: boolean
+  audience?: { type: PrincipalType; id: string }[]
 }
 
 export interface FeedResponse {

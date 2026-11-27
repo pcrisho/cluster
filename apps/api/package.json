@@ -27,6 +27,8 @@
     "test:e2e": "jest --config jest.e2e.config.js --runInBand"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1178.0",
+    "@aws-sdk/lib-storage": "^3.1178.0",
     "@cluster/editor-schema": "workspace:*",
     "@cluster/theme": "workspace:*",
     "@nest-lab/throttler-storage-redis": "^1.2.0",
@@ -50,7 +52,6 @@
     "express": "^5.2.1",
     "helmet": "^8.3.0",
     "ioredis": "^5.10.1",
-    "minio": "^8.0.7",
     "multer": "^2.5.0",
     "nodemailer": "^10.3.1",
     "passport": "^0.7.0",

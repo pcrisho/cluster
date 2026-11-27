@@ -415,6 +415,16 @@ export interface ComplianceDashboard {
   filters: ComplianceReport["filters"]
 }
 
+export interface MainNodeCompliance {
+  mainNodeId: string
+  total: number
+  completed: number
+  overdue: number
+  inProgress: number
+  notStarted: number
+  rate: number | null
+}
+
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1"
 
@@ -543,6 +553,10 @@ export const growApi = {
       `/grow/reports/compliance/dashboard${query ? `?${query}` : ""}`
     )
   },
+  getComplianceByMainNode: () =>
+    api.get<{ items: MainNodeCompliance[] }>(
+      "/grow/reports/compliance/by-main-node"
+    ),
   exportComplianceReport: async (filters: ReportFilters = {}) => {
     const token = await getFreshAccessToken()
     const query = reportQuery({

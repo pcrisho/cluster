@@ -1,5 +1,8 @@
 import { Injectable, NotFoundException } from "@nestjs/common"
+import type { Prisma } from "@prisma/client"
+import type { AuthenticatedUser } from "../../common/decorators"
 import { PrismaService } from "../../prisma/prisma.service"
+import { PartitionService } from "../org/partition.service"
 import { buildDirectoryWhere } from "./directory-filters"
 import { completedYears } from "./celebrations.service"
 import { DirectoryQueryDto, DirectorySort } from "./dto/directory-query.dto"
@@ -8,12 +11,18 @@ const MAX_PAGE_SIZE = 50
 
 @Injectable()
 export class DirectoryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly partition: PartitionService,
+  ) {}
 
-  async list(orgId: string, query: DirectoryQueryDto) {
+  async list(user: AuthenticatedUser, query: DirectoryQueryDto) {
     const page = query.page ?? 1
     const take = Math.min(query.limit ?? 20, MAX_PAGE_SIZE)
-    const where = buildDirectoryWhere(orgId, query)
+    const scope = await this.partition.scopeFor(user)
+    const where: Prisma.UserWhereInput = {
+      AND: [buildDirectoryWhere(user.orgId, query), this.partition.peopleFilter(scope)],
+    }
     const desc = query.sort === DirectorySort.NAME_DESC
     const direction = desc ? "desc" : "asc"
 
@@ -43,9 +52,16 @@ export class DirectoryService {
     return { success: true, data: users, meta: { total, page, limit: take } }
   }
 
-  async profile(userId: string, orgId: string) {
+  async profile(userId: string, viewer: AuthenticatedUser) {
+    const orgId = viewer.orgId
+    const scope = userId !== viewer.id ? await this.partition.scopeFor(viewer) : { all: true as const }
     const user = await this.prisma.user.findFirst({
-      where: { id: userId, organizationId: orgId, isActive: true },
+      where: {
+        id: userId,
+        organizationId: orgId,
+        isActive: true,
+        ...(userId !== viewer.id ? this.partition.peopleFilter(scope) : {}),
+      },
       select: {
         id: true,
         firstName: true,

@@ -230,8 +230,8 @@
     --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* Cluster tokens: neutral surfaces, status tones, and Cluster indigo as primary.
-   Hex only, so `pnpm verify:tokens` can check every pair (packages/theme/src/contrast.ts). */
+/* Cluster tokens: Kontinum neutrals and status tones, Cluster indigo as primary.
+   Hex only, so `pnpm verify:tokens` can check every pair (lib/tokens/contrast.ts). */
 :root {
     --background: #ffffff;
     --foreground: #0a0a0a;

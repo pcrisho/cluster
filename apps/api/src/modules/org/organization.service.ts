@@ -153,12 +153,12 @@ export class OrganizationService {
         isolateRootNodes: true,
       },
     })
-    // Isolation is effective only with the instance switch, and CONNECT and LIFE cannot run isolated.
+    // Isolation is effective only with the instance switch, and LIFE cannot run isolated.
     const isolated = settings.nodeIsolationAllowed && (dto.isolateRootNodes ?? before.isolateRootNodes)
     if (isolationBlocksModule(isolated, dto.enabledModules ?? before.enabledModules)) {
       throw new ConflictException({
         code: "ISOLATION_MODULES",
-        message: "CONNECT and LIFE cannot be enabled while the organization isolates its main nodes",
+        message: "LIFE cannot be enabled while the organization isolates its main nodes",
       })
     }
     // The identifier follows the name; a name with no Latin letters leaves it as it is.

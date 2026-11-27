@@ -28,6 +28,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { PostBody } from "@/components/connect/post-body"
+import { PostAudienceBadge } from "@/components/connect/post-audience-badge"
 import { PostDetailDialog } from "@/components/connect/post-detail-dialog"
 import { PostDialog } from "@/components/connect/post-dialog"
 import { PostImages } from "@/components/connect/post-images"
@@ -141,11 +142,16 @@ export function PostCard({ post, onDeleted, onUpdated }: PostCardProps) {
     >
       <CardContent>
         <article>
-          {post.isPinned && (
-            <Badge variant="secondary" className="mb-3">
-              <MegaphoneIcon data-icon="inline-start" />
-              {t("announcement")}
-            </Badge>
+          {(post.isPinned || post.restricted || user?.organization.isolated) && (
+            <div className="mb-3 flex flex-wrap items-center gap-1.5">
+              {post.isPinned && (
+                <Badge variant="secondary">
+                  <MegaphoneIcon data-icon="inline-start" />
+                  {t("announcement")}
+                </Badge>
+              )}
+              <PostAudienceBadge post={post} />
+            </div>
           )}
 
           <div className="flex items-start justify-between">

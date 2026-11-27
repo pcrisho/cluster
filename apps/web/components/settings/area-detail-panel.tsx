@@ -1,8 +1,10 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import Link from "next/link"
 import {
   ArchiveIcon,
+  ArrowUpRightIcon,
   BriefcaseIcon,
   PencilIcon,
   PlusIcon,
@@ -14,6 +16,7 @@ import { toast } from "sonner"
 import { adminApi } from "@/lib/admin-api"
 import { getErrorMessage } from "@/lib/api"
 import type { FullOrgChartData } from "@/lib/org-api"
+import type { MainNodeComplianceSummary } from "@/lib/root-node-rows"
 import { getImageUrl } from "@/lib/images"
 import { OrgNodeIcon } from "@/components/shared/org-node-icon"
 import { StatusBadge } from "@/components/ui/status-badge"
@@ -47,6 +50,9 @@ interface AreaDetailPanelProps {
   /** Every area, to name the parent and count the sub-areas. */
   nodes: AreaNode[]
   isAdmin: boolean
+  showCompliance?: boolean
+  compliance?: MainNodeComplianceSummary | null
+  complianceLoading?: boolean
   /** Shown as a close button; a sheet brings its own. */
   onClose?: () => void
   onEdit: (node: AreaNode) => void
@@ -59,6 +65,9 @@ export function AreaDetailPanel({
   node,
   nodes,
   isAdmin,
+  showCompliance = false,
+  compliance = null,
+  complianceLoading = false,
   onClose,
   onEdit,
   onAddChild,
@@ -221,6 +230,55 @@ export function AreaDetailPanel({
               <dd className="tabular-nums">{node._count.profiles}</dd>
               <dt className="text-muted-foreground">{t("positions")}</dt>
               <dd className="tabular-nums">{node.positions.length}</dd>
+              {isMain && showCompliance && (
+                <>
+                  <dt className="text-muted-foreground">{t("compliance")}</dt>
+                  <dd>
+                    {complianceLoading && !compliance ? (
+                      <Skeleton className="h-4 w-24" />
+                    ) : !compliance || compliance.rate === null ? (
+                      <span className="text-muted-foreground">
+                        {t("noMandatoryCourses")}
+                      </span>
+                    ) : (
+                      <div className="flex flex-col items-start gap-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span
+                            className={cn(
+                              "font-medium tabular-nums",
+                              compliance.rate === 100
+                                ? "text-success-text"
+                                : compliance.overdue > 0
+                                  ? "text-danger-text"
+                                  : "text-foreground"
+                            )}
+                          >
+                            {compliance.rate}%
+                          </span>
+                          <span className="text-xs text-muted-foreground tabular-nums">
+                            ({compliance.completed}/{compliance.total})
+                          </span>
+                          {compliance.overdue > 0 && (
+                            <StatusBadge tone="danger">
+                              {t("overdueCount", { count: compliance.overdue })}
+                            </StatusBadge>
+                          )}
+                        </div>
+                        <Link
+                          href={`/grow/reports?orgNodeId=${node.id}`}
+                          className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                        >
+                          {t("viewReport")}
+                          <ArrowUpRightIcon
+                            className="size-3.5"
+                            aria-hidden
+                          />
+                        </Link>
+                      </div>
+                    )}
+                  </dd>
+                </>
+              )}
             </dl>
             {isAdmin && (
               <div className="flex flex-wrap gap-2 border-t pt-4">

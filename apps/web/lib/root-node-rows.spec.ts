@@ -3,6 +3,7 @@ import {
   filterRootRows,
   rootNodeRows,
   sortRootRows,
+  type MainNodeComplianceSummary,
   type RootNodeRow,
 } from "./root-node-rows"
 
@@ -114,5 +115,32 @@ describe("sortRootRows", () => {
     const before = ids(copy)
     sortRootRows(copy, "name")
     expect(ids(copy)).toEqual(before)
+  })
+
+  it("attaches compliance and sorts lowest compliance first, overdue tie-break, unrated last", () => {
+    const compliance = new Map<string, MainNodeComplianceSummary>([
+      ["Acme", { total: 4, completed: 2, overdue: 0, rate: 50 }],
+      ["Globex", { total: 4, completed: 2, overdue: 2, rate: 50 }],
+      ["Zeta", { total: 0, completed: 0, overdue: 0, rate: null }],
+    ])
+    const withCompliance = rootNodeRows(
+      [...nodes, node("Beta", null, 3), node("Omega", null, 2)],
+      compliance
+    )
+    compliance.set("Beta", { total: 2, completed: 2, overdue: 0, rate: 100 })
+    const rows2 = rootNodeRows(
+      [...nodes, node("Beta", null, 3), node("Omega", null, 2)],
+      compliance
+    )
+    expect(withCompliance.find((r) => r.node.id === "Acme")?.compliance).toEqual(
+      { total: 4, completed: 2, overdue: 0, rate: 50 }
+    )
+    expect(ids(sortRootRows(rows2, "compliance"))).toEqual([
+      "Globex",
+      "Acme",
+      "Beta",
+      "Omega",
+      "Zeta",
+    ])
   })
 })

@@ -17,11 +17,18 @@ import { seedsOf, themeData } from "../../common/theme";
 import { AuthService } from "../auth/auth.service";
 import { InvitationService } from "../auth/invitation.service";
 import {
+  pingCollab,
+  pingRedis,
+  probe,
+  summarizeSystemStatus,
+} from "../../common/health-probes";
+import {
   CreateOrganizationDto,
   UpdateInstanceSettingsDto,
   UpdateOrganizationStatusDto,
 } from "./dto/instance.dto";
 import { MailService } from "../mail/mail.service";
+import { StorageService } from "../storage/storage.service";
 
 /** God mode: settings of the whole installation and its organizations (tenants). Uses the system client throughout: it crosses organizations and the bootstrap has no request. */
 @Injectable()
@@ -34,6 +41,7 @@ export class InstanceService implements OnApplicationBootstrap {
     private readonly invitations: InvitationService,
     private readonly config: ConfigService,
     private readonly mail: MailService,
+    private readonly storage: StorageService,
   ) {}
 
   /**
@@ -99,6 +107,41 @@ export class InstanceService implements OnApplicationBootstrap {
 
   getSettings() {
     return loadInstanceSettings(this.prisma);
+  }
+
+  /** Live read-only health snapshot for the superadmin panel (Postgres, Redis, storage, collab, mail). */
+  async getSystemStatus() {
+    const [database, redis, storage, collab] = await Promise.all([
+      probe(() => this.prisma.$queryRaw`SELECT 1`),
+      probe(pingRedis),
+      probe(() => this.storage.ping()),
+      pingCollab(this.config.get<string>("COLLAB_URL")),
+    ]);
+    return {
+      status: summarizeSystemStatus({
+        database,
+        redis,
+        storage,
+        collab: collab.status,
+      }),
+      checkedAt: new Date().toISOString(),
+      uptimeSeconds: Math.floor(process.uptime()),
+      mailEnabled: this.mail.enabled,
+      checks: {
+        database,
+        redis,
+        storage,
+        collab: collab.status,
+      },
+      collab:
+        collab.status === "ok"
+          ? {
+              documents: collab.documents ?? 0,
+              connections: collab.connections ?? 0,
+              uptimeSeconds: collab.uptimeSeconds ?? 0,
+            }
+          : null,
+    };
   }
 
   async updateSettings(

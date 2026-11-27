@@ -522,4 +522,116 @@ describe("GROW reports e2e", () => {
     expect(lines[1]).toContain("'=HYPERLINK(1)");
     expect(lines[1]).toContain("Report B");
   });
+
+  it("by-main-node: aggregates mandatory compliance per active main node, matches dashboard, enforces scope and module", async () => {
+    const emptyRoot = (
+      await prisma.orgNode.create({
+        data: { name: "Empty Root", organizationId: admin.orgId },
+      })
+    ).id;
+    const archivedRoot = (
+      await prisma.orgNode.create({
+        data: {
+          name: "Archived Root",
+          organizationId: admin.orgId,
+          isActive: false,
+        },
+      })
+    ).id;
+
+    type MainNodeComplianceItem = {
+      mainNodeId: string;
+      total: number;
+      completed: number;
+      overdue: number;
+      inProgress: number;
+      notStarted: number;
+      rate: number | null;
+    };
+
+    const res = await http
+      .get("/api/v1/grow/reports/compliance/by-main-node")
+      .set(admin.auth)
+      .expect(200);
+    const items = res.body.items as MainNodeComplianceItem[];
+    expect(items.map((i) => i.mainNodeId)).not.toContain(archivedRoot);
+
+    const plantItem = items.find((i) => i.mainNodeId === plant);
+    const plantDashboard = (
+      await http
+        .get(`/api/v1/grow/reports/compliance/dashboard?orgNodeId=${plant}`)
+        .set(admin.auth)
+        .expect(200)
+    ).body as { total: number; completionRate: number | null };
+    expect(plantItem).toEqual({
+      mainNodeId: plant,
+      total: 2,
+      completed: 1,
+      overdue: 1,
+      inProgress: 0,
+      notStarted: 0,
+      rate: 50,
+    });
+    expect(plantItem?.total).toBe(plantDashboard.total);
+    expect(plantItem?.rate).toBe(plantDashboard.completionRate);
+
+    expect(items.find((i) => i.mainNodeId === office)).toEqual({
+      mainNodeId: office,
+      total: 1,
+      completed: 0,
+      overdue: 0,
+      inProgress: 0,
+      notStarted: 1,
+      rate: 0,
+    });
+    expect(items.find((i) => i.mainNodeId === emptyRoot)).toEqual({
+      mainNodeId: emptyRoot,
+      total: 0,
+      completed: 0,
+      overdue: 0,
+      inProgress: 0,
+      notStarted: 0,
+      rate: null,
+    });
+
+    // Area manager sees only their own main node; nobody gets 403; outsider sees none of admin's nodes.
+    const scoped = (
+      await http
+        .get("/api/v1/grow/reports/compliance/by-main-node")
+        .set(areaManager.auth)
+        .expect(200)
+    ).body.items as MainNodeComplianceItem[];
+    expect(scoped.map((i) => i.mainNodeId)).toEqual([plant]);
+
+    await http
+      .get("/api/v1/grow/reports/compliance/by-main-node")
+      .set(nobody.auth)
+      .expect(403);
+
+    const outItems = (
+      await http
+        .get("/api/v1/grow/reports/compliance/by-main-node")
+        .set(outsider.auth)
+        .expect(200)
+    ).body.items as MainNodeComplianceItem[];
+    expect(outItems.map((i) => i.mainNodeId)).not.toContain(plant);
+    expect(outItems.map((i) => i.mainNodeId)).not.toContain(office);
+
+    // When GROW is disabled for the organization, the endpoint is refused.
+    await prisma.organization.update({
+      where: { id: admin.orgId },
+      data: { enabledModules: ["KNOW"] },
+    });
+    try {
+      await http
+        .get("/api/v1/grow/reports/compliance/by-main-node")
+        .set(admin.auth)
+        .expect(403);
+    } finally {
+      await prisma.organization.update({
+        where: { id: admin.orgId },
+        data: { enabledModules: ["CONNECT", "KNOW", "GROW", "LIFE"] },
+      });
+    }
+  });
 });

@@ -11,7 +11,12 @@ import { StorageService } from "../storage/storage.service";
 import { CourseAccessService } from "./course-access.service";
 import { CourseProgressService } from "./course-progress.service";
 import { outlineForAuthor, stepForAuthor } from "./course-dto";
-import { EMPTY_LESSON, parseLessonContent, videoKeyOf } from "./lesson-content";
+import {
+  EMPTY_LESSON,
+  lessonFileKeysOf,
+  parseLessonContent,
+  removedFileKeys,
+} from "./lesson-content";
 import { EMPTY_QUIZ, parseQuizContent } from "./quiz-content";
 import type { CreateStepDto, UpdateStepDto } from "./dto/content.dto";
 
@@ -55,16 +60,17 @@ export class CourseContentService {
 
   async deleteSection(user: AuthenticatedUser, sectionId: string) {
     const section = await this.requireSection(user, sectionId);
-    const steps = await this.prisma.courseStep.findMany({
-      where: { sectionId },
-      select: { content: true },
-    });
-    await this.prisma.$transaction(async (tx) => {
+    const candidateKeys = await this.prisma.$transaction(async (tx) => {
+      const steps = await tx.courseStep.findMany({
+        where: { sectionId },
+        select: { content: true },
+      });
       await tx.courseSection.delete({ where: { id: sectionId } });
       await this.renumberSections(tx, section.courseId);
       await this.progress.reconcile(tx, section.courseId);
+      return steps.flatMap((s) => lessonFileKeysOf(s.content));
     });
-    for (const step of steps) await this.deleteVideo(videoKeyOf(step.content));
+    await this.deleteUnusedCourseFiles(section.courseId, candidateKeys);
   }
 
   async moveSection(
@@ -113,39 +119,67 @@ export class CourseContentService {
     dto: UpdateStepDto,
   ) {
     const step = await this.requireStep(user, stepId);
-    const data: Prisma.CourseStepUpdateInput = {};
-    if (dto.title !== undefined) data.title = dto.title;
-    if (dto.required !== undefined) data.required = dto.required;
-    if (dto.durationMinutes !== undefined)
-      data.durationMinutes = dto.durationMinutes;
-    if (dto.content !== undefined) {
-      const content =
-        step.type === StepType.QUIZ
-          ? parseQuizContent(dto.content)
-          : parseLessonContent(dto.content, {
-              orgId: user.orgId,
-              courseId: step.courseId,
-              current: step.content,
+    const { saved, removed } = await this.prisma.$transaction(async (tx) => {
+      const now = await tx.courseStep.findUnique({ where: { id: stepId } });
+      if (!now) throw new NotFoundException("Step not found");
+      const data: Prisma.CourseStepUpdateInput = {};
+      if (dto.title !== undefined) data.title = dto.title;
+      if (dto.required !== undefined) data.required = dto.required;
+      if (dto.durationMinutes !== undefined)
+        data.durationMinutes = dto.durationMinutes;
+      if (dto.content !== undefined) {
+        const content =
+          now.type === StepType.QUIZ
+            ? parseQuizContent(dto.content)
+            : parseLessonContent(dto.content, {
+                orgId: user.orgId,
+                courseId: now.courseId,
+                current: now.content,
+              });
+        if (
+          now.type === StepType.LESSON &&
+          "kind" in content &&
+          content.kind === "files" &&
+          content.files.length > 0
+        ) {
+          const others = await tx.courseStep.findMany({
+            where: { courseId: now.courseId, id: { not: stepId } },
+            select: { content: true },
+          });
+          const usedElsewhere = new Set(
+            others.flatMap((s) => lessonFileKeysOf(s.content)),
+          );
+          if (content.files.some((f) => usedElsewhere.has(f.key))) {
+            throw new BadRequestException({
+              code: "LESSON_FILE_IN_USE",
+              message: "A file already belongs to another lesson",
             });
-      data.content = content as unknown as Prisma.InputJsonValue;
-    }
-    const updated = await this.prisma.$transaction(async (tx) => {
+          }
+        }
+        data.content = content as unknown as Prisma.InputJsonValue;
+      }
       const saved = await tx.courseStep.update({
         where: { id: stepId },
         data,
       });
       if (dto.required === false)
-        await this.progress.reconcile(tx, step.courseId);
-      return saved;
+        await this.progress.reconcile(tx, now.courseId);
+      return {
+        saved,
+        removed: removedFileKeys(now.content, saved.content),
+      };
     });
-    if (videoKeyOf(updated.content) !== videoKeyOf(step.content))
-      await this.deleteVideo(videoKeyOf(step.content));
-    return stepForAuthor(updated);
+    await this.deleteUnusedCourseFiles(step.courseId, removed);
+    return stepForAuthor(saved);
   }
 
   async deleteStep(user: AuthenticatedUser, stepId: string) {
     const step = await this.requireStep(user, stepId);
-    await this.prisma.$transaction(async (tx) => {
+    const candidateKeys = await this.prisma.$transaction(async (tx) => {
+      const now = await tx.courseStep.findUnique({
+        where: { id: stepId },
+        select: { content: true },
+      });
       await tx.courseStep.delete({ where: { id: stepId } });
       await this.renumber(
         tx,
@@ -153,16 +187,32 @@ export class CourseContentService {
         await this.stepsOf(tx, step.sectionId),
       );
       await this.progress.reconcile(tx, step.courseId);
+      return lessonFileKeysOf(now?.content);
     });
-    await this.deleteVideo(videoKeyOf(step.content));
+    await this.deleteUnusedCourseFiles(step.courseId, candidateKeys);
   }
 
-  /** A video belongs to one lesson (it gets there only by its upload): when it leaves, it goes. */
-  private async deleteVideo(key: string | null) {
-    if (key)
-      await bestEffort("delete lesson video", () =>
-        this.storage.deleteFile(key),
-      );
+  /** Removes storage objects that left a lesson, only after verifying no other step in the course still holds them. */
+  private async deleteUnusedCourseFiles(
+    courseId: string,
+    candidateKeys: string[],
+  ) {
+    const unique = [...new Set(candidateKeys)];
+    if (unique.length === 0) return;
+    const remaining = await this.prisma.courseStep.findMany({
+      where: { courseId },
+      select: { content: true },
+    });
+    const stillReferenced = new Set(
+      remaining.flatMap((s) => lessonFileKeysOf(s.content)),
+    );
+    for (const key of unique) {
+      if (!stillReferenced.has(key)) {
+        await bestEffort("delete lesson file", () =>
+          this.storage.deleteFile(key),
+        );
+      }
+    }
   }
 
   /** Moves a step to `position` in a section of the same course (clamped to the end). */

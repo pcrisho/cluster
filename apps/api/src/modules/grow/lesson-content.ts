@@ -27,6 +27,24 @@ export function videoKeyOf(content: unknown): string | null {
     : null;
 }
 
+/** Storage keys of every uploaded file or video held by a lesson's content. */
+export function lessonFileKeysOf(content: unknown): string[] {
+  const video = videoKeyOf(content);
+  if (video) return [video];
+  const value = content as Partial<Extract<LessonContent, { kind: "files" }>>;
+  if (value?.kind !== "files" || !Array.isArray(value.files)) return [];
+  const keys = value.files
+    .map((file) => file?.key)
+    .filter((key): key is string => typeof key === "string");
+  return [...new Set(keys)];
+}
+
+/** Storage keys that belonged to `before` and are no longer referenced in `after`. */
+export function removedFileKeys(before: unknown, after: unknown): string[] {
+  const kept = new Set(lessonFileKeysOf(after));
+  return lessonFileKeysOf(before).filter((key) => !kept.has(key));
+}
+
 export const EMPTY_LESSON: LessonContent = {
   kind: "text",
   doc: { type: "doc", content: [{ type: "paragraph" }] },

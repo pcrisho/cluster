@@ -4,8 +4,8 @@ Thank you for your interest in contributing to Cluster.
 
 ## Prerequisites
 
-- **Node.js** `>= 22`
-- **pnpm** `>= 9` (`corepack enable && corepack prepare pnpm@9.15.4 --activate`)
+- **Node.js** `>= 24.22.3`
+- **pnpm** `10` (`corepack enable && corepack prepare pnpm@10.34.9 --activate`)
 - **Docker** and **Docker Compose**
 
 ## Local Development Setup

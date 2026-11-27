@@ -8,12 +8,12 @@
   <p>
     <a href="https://clusterhq.app">Website</a> ·
     <a href="https://docs.clusterhq.app">Documentation (EN / ES)</a> ·
-    <a href="https://docs.clusterhq.app/en/changelog/0-1-0/">Changelog</a> ·
+    <a href="https://docs.clusterhq.app/en/changelog/0-2-0/">Changelog</a> ·
     <a href="SECURITY.md">Security</a>
   </p>
   <p>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-5e47e8?style=flat-square" alt="MIT License" /></a>
-    <a href="https://github.com/pcrisho/cluster/releases/tag/v0.1.0"><img src="https://img.shields.io/badge/release-v0.1.0-5e47e8?style=flat-square" alt="Release v0.1.0" /></a>
+    <a href="https://github.com/pcrisho/cluster/releases/tag/v0.2.0"><img src="https://img.shields.io/badge/release-v0.2.0-5e47e8?style=flat-square" alt="Release v0.2.0" /></a>
     <a href="https://github.com/pcrisho/cluster/actions/workflows/ci.yml"><img src="https://github.com/pcrisho/cluster/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
     <img src="https://img.shields.io/badge/languages-EN%20%7C%20ES-5e47e8?style=flat-square" alt="Languages EN and ES" />
   </p>
@@ -29,7 +29,7 @@
 
 **Cluster** is an Employee Experience Platform (EXP) built to centralize internal documentation, employee training, and company communication in one web app you run on your own infrastructure.
 
-- **Multi-tenant isolation**: PostgreSQL Row-Level Security (`tenant` policy) across all 28 tenant-scoped tables, separate restricted/system DB roles, and private S3 storage served only through authenticated API routes.
+- **Multi-tenant isolation**: PostgreSQL Row-Level Security (`tenant` policy) across all 29 tenant-scoped tables, separate restricted/system DB roles, and private S3 storage served only through authenticated API routes.
 - **Bilingual out of the box**: full English and Spanish (neutral Latin American) across the interface, emails, certificate PDFs, and CSV exports.
 - **Custom branding**: configurable instance and per-organization colors, typography, corner radius, glass surfaces, and logos with automatic WCAG contrast verification.
 
@@ -130,7 +130,7 @@ Read more in [Architecture and services](https://docs.clusterhq.app/en/overview/
 
 ## 🛠️ Local Development
 
-Requires **Node.js >= 22**, **pnpm >= 9**, and **Docker**.
+Requires **Node.js >= 24.22.3**, **pnpm 10**, and **Docker**.
 
 ```bash
 cp .env.example .env                             # set COLLAB_INTERNAL_SECRET (e.g. `openssl rand -hex 32`)

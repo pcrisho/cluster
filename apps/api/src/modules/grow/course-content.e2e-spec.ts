@@ -1,6 +1,7 @@
 import { INestApplication } from "@nestjs/common";
 import request from "supertest";
 import { SystemPrismaService } from "../../prisma/system-prisma.service";
+import { StorageService } from "../storage/storage.service";
 import { createActor, createTestApp, type TestActor } from "../../test-helpers";
 import { EMPTY_QUIZ } from "./quiz-content";
 
@@ -33,6 +34,7 @@ const question = {
 describe("GROW course content e2e", () => {
   let app: INestApplication;
   let prisma: SystemPrismaService;
+  let storage: StorageService;
   let http: ReturnType<typeof request>;
   let admin: TestActor;
   let author: TestActor;
@@ -88,9 +90,17 @@ describe("GROW course content e2e", () => {
       .set(who.auth)
       .attach("file", file, { filename, contentType });
 
+  const stored = async (courseId: string) =>
+    (
+      await storage.listObjects(
+        `organizations/${admin.orgId}/grow/${courseId}/`,
+      )
+    ).map((o) => o.name);
+
   beforeAll(async () => {
     app = await createTestApp();
     prisma = app.get(SystemPrismaService);
+    storage = app.get(StorageService);
     http = request(app.getHttpServer());
     admin = await createActor(app, "cc-admin", "ADMIN");
     author = await createActor(app, "cc-author", "COLLABORATOR", admin.orgId);
@@ -363,6 +373,94 @@ describe("GROW course content e2e", () => {
           files: [{ key: res.body.key, name: "Guide.pdf", size: PDF.length }],
         },
       }).expect(200);
+    });
+
+    it("deletes lesson files on remove, kind switch, video upload, step delete and section delete, and forbids sharing a key across steps", async () => {
+      const id = await newCourse();
+      const s1 = await addSection(id, "S1");
+      const l1 = await addStep(s1, "L1");
+      const l2 = await addStep(s1, "L2");
+
+      const uploadPdf = async (name: string) =>
+        (await upload(id, PDF, name, "application/pdf").expect(201)).body as {
+          key: string;
+          name: string;
+          size: number;
+        };
+
+      const f1 = await uploadPdf("f1.pdf");
+      const f2 = await uploadPdf("f2.pdf");
+
+      // Attach [f1, f2], then reorder to [f2, f1] -> both stay in storage.
+      await call(author, "patch", `/steps/${l1}`, {
+        content: { kind: "files", files: [f1, f2] },
+      }).expect(200);
+      await call(author, "patch", `/steps/${l1}`, {
+        content: { kind: "files", files: [f2, f1] },
+      }).expect(200);
+      expect((await stored(id)).sort()).toEqual([f1.key, f2.key].sort());
+
+      // Remove f1 -> f1 is deleted at source; f2 remains.
+      await call(author, "patch", `/steps/${l1}`, {
+        content: { kind: "files", files: [f2] },
+      }).expect(200);
+      expect(await stored(id)).toEqual([f2.key]);
+      await http.get(`/api/v1/files/${f1.key}`).set(author.auth).expect(404);
+      await http.get(`/api/v1/files/${f2.key}`).set(author.auth).expect(200);
+
+      // Sharing f2 with another step in the same course is refused with LESSON_FILE_IN_USE.
+      const sharedRes = await call(author, "patch", `/steps/${l2}`, {
+        content: { kind: "files", files: [f2] },
+      }).expect(400);
+      expect(sharedRes.body.code).toBe("LESSON_FILE_IN_USE");
+      expect(await stored(id)).toEqual([f2.key]);
+
+      // Switching l1 from files to text deletes f2.
+      await call(author, "patch", `/steps/${l1}`, {
+        content: { kind: "text", doc: doc() },
+      }).expect(200);
+      expect(await stored(id)).toEqual([]);
+
+      // Uploading a video onto a files lesson deletes the previous files.
+      const f3 = await uploadPdf("f3.pdf");
+      await call(author, "patch", `/steps/${l1}`, {
+        content: { kind: "files", files: [f3] },
+      }).expect(200);
+      const mp4 = Buffer.concat([
+        Buffer.from([0, 0, 0, 20]),
+        Buffer.from("ftypisom\0\0\0\0isom"),
+        Buffer.alloc(16 * 1024, 1),
+      ]);
+      const videoRes = await http
+        .put(`/api/v1/grow/steps/${l1}/video?name=clip.mp4`)
+        .set(author.auth)
+        .set("Content-Type", "video/mp4")
+        .send(mp4)
+        .expect(200);
+      const videoKey = videoRes.body.content.video.key as string;
+      expect(await stored(id)).toEqual([videoKey]);
+      await http.get(`/api/v1/files/${f3.key}`).set(author.auth).expect(404);
+
+      // Deleting l2 with an attached file deletes its file, leaving l1's video intact.
+      const f4 = await uploadPdf("f4.pdf");
+      await call(author, "patch", `/steps/${l2}`, {
+        content: { kind: "files", files: [f4] },
+      }).expect(200);
+      await call(author, "delete", `/steps/${l2}`).expect(204);
+      expect(await stored(id)).toEqual([videoKey]);
+
+      // Deleting a section deletes files of all steps in that section.
+      const s2 = await addSection(id, "S2");
+      const l3 = await addStep(s2, "L3");
+      const f5 = await uploadPdf("f5.pdf");
+      await call(author, "patch", `/steps/${l3}`, {
+        content: { kind: "files", files: [f5] },
+      }).expect(200);
+      await call(author, "delete", `/sections/${s2}`).expect(204);
+      expect(await stored(id)).toEqual([videoKey]);
+
+      await call(author, "delete", `/sections/${s1}`).expect(204);
+      expect(await stored(id)).toEqual([]);
     });
   });
 

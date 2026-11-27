@@ -1,5 +1,5 @@
 import type { INestApplication } from "@nestjs/common";
-import { Capability, UserRole } from "@prisma/client";
+import { Capability, ModuleKey, UserRole } from "@prisma/client";
 import { SystemPrismaService } from "../../prisma/system-prisma.service";
 import { createActor, type TestActor } from "../../test-helpers";
 
@@ -25,7 +25,10 @@ export interface IsolatedOrg {
  * An organization with both isolation switches on: the instance switch is set directly in the database,
  * so a test that uses this must restore it to false in afterAll (it is global to the test database).
  */
-export async function isolatedOrg(app: INestApplication): Promise<IsolatedOrg> {
+export async function isolatedOrg(
+  app: INestApplication,
+  enabledModules: ModuleKey[] = [ModuleKey.KNOW, ModuleKey.GROW],
+): Promise<IsolatedOrg> {
   const prisma = app.get(SystemPrismaService);
   await prisma.instanceSettings.upsert({
     where: { id: 1 },
@@ -33,13 +36,13 @@ export async function isolatedOrg(app: INestApplication): Promise<IsolatedOrg> {
     update: { nodeIsolationAllowed: true },
   });
   const slug = `iso-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  // CONNECT and LIFE cannot run isolated (ISOLATION_MODULES), so the organization starts without them.
+  // LIFE cannot run isolated (ISOLATION_MODULES), so the organization starts without it.
   const org = await prisma.organization.create({
     data: {
       name: slug,
       slug,
       isolateRootNodes: true,
-      enabledModules: ["KNOW", "GROW"],
+      enabledModules,
     },
   });
   const orgId = org.id;
