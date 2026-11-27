@@ -4,7 +4,7 @@
     <img src="https://docs.clusterhq.app/Imagotipo.svg" alt="Cluster" width="64" height="64" />
   </a>
   <h1>Cluster</h1>
-  <p><strong>Open-source knowledge base and training platform (LMS) — self-hosted on your own server, in your brand.</strong></p>
+  <p><strong>Open-core knowledge base and training platform (LMS) — self-hosted on your own server, in your brand.</strong></p>
   <p>
     <a href="https://clusterhq.app">Website</a> ·
     <a href="https://docs.clusterhq.app">Documentation (EN / ES)</a> ·
@@ -32,6 +32,14 @@
 - **Multi-tenant isolation**: PostgreSQL Row-Level Security (`tenant` policy) across all 29 tenant-scoped tables, separate restricted/system DB roles, and private S3 storage served only through authenticated API routes.
 - **Bilingual out of the box**: full English and Spanish (neutral Latin American) across the interface, emails, certificate PDFs, and CSV exports.
 - **Custom branding**: configurable instance and per-organization colors, typography, corner radius, glass surfaces, and logos with automatic WCAG contrast verification.
+
+### Open core: what is free and what is commercial
+
+Cluster is **open core**.
+
+- **The core is MIT-licensed and free to self-host.** Everything Cluster does today is in this repository: KNOW, GROW, CONNECT, multi-tenant isolation, theming and branding, English and Spanish, and the self-hosting stack.
+- **The commercial plan offers managed hosting and support.** You can run Cluster yourself with no fee, or have us run it for you.
+- **Planned commercial extras: single sign-on (SSO) and advanced audit.** These do not exist yet. Nothing that works today in this repository will move behind a paywall.
 
 ---
 
@@ -152,5 +160,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for local service URLs, demo credentials,
 
 - **Documentation**: full evaluation, self-hosting, and user guides (EN / ES) at [docs.clusterhq.app](https://docs.clusterhq.app).
 - **Security**: report vulnerabilities privately to [security@clusterhq.app](mailto:security@clusterhq.app) (initial response within 72 hours) — see [SECURITY.md](SECURITY.md).
-- **Contributing**: pull request checklist, module boundaries, and testing rules in [CONTRIBUTING.md](CONTRIBUTING.md).
+- **Contributing**: pull request checklist, module boundaries, and testing rules in [CONTRIBUTING.md](CONTRIBUTING.md). Participation is covered by our [Code of Conduct](CODE_OF_CONDUCT.md).
 - **License**: [MIT](LICENSE).

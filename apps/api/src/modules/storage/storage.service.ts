@@ -2,6 +2,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  OnModuleDestroy,
   OnModuleInit,
 } from "@nestjs/common";
 import {
@@ -24,7 +25,7 @@ const MULTIPART_PART_BYTES = 8 * 1024 * 1024;
 const DELETE_BATCH_SIZE = 1000;
 
 @Injectable()
-export class StorageService implements OnModuleInit {
+export class StorageService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(StorageService.name);
   private client: S3Client;
 
@@ -44,6 +45,11 @@ export class StorageService implements OnModuleInit {
           process.env.STORAGE_SECRET_KEY || "cluster-storage-secret",
       },
     });
+  }
+
+  // Close the client's keep-alive sockets on shutdown: open ones keep the whole SDK alive
+  onModuleDestroy() {
+    this.client.destroy();
   }
 
   async onModuleInit() {

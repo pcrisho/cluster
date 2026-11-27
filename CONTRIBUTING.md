@@ -2,6 +2,8 @@
 
 Thank you for your interest in contributing to Cluster.
 
+By taking part you agree to follow our [Code of Conduct](CODE_OF_CONDUCT.md). Cluster is open core: contributions to this repository are released under the MIT license. Bugs and ideas go through the [issue forms](.github/ISSUE_TEMPLATE); report security problems privately as described in [SECURITY.md](SECURITY.md).
+
 ## Prerequisites
 
 - **Node.js** `>= 24.22.3`
