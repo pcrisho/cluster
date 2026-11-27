@@ -34,6 +34,12 @@ export class ReportsController {
     return this.reports.dashboard(user, query);
   }
 
+  @Throttle({ default: { limit: 120, ttl: 60000 } })
+  @Get("by-main-node")
+  byMainNode(@CurrentUser() user: AuthenticatedUser) {
+    return this.reports.byMainNode(user);
+  }
+
   @Throttle({ default: { limit: 20, ttl: 60000 } })
   @Get("export")
   async export(

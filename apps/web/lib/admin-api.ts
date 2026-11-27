@@ -12,6 +12,24 @@ import {
 import type { GlassKey, Seeds } from "@cluster/theme"
 import type { OrgNodeRef, PositionRef } from "./org-api"
 
+export interface InstanceSystemStatus {
+  status: "ok" | "degraded" | "down"
+  checkedAt: string
+  uptimeSeconds: number
+  mailEnabled: boolean
+  checks: {
+    database: "ok" | "down"
+    redis: "ok" | "down"
+    storage: "ok" | "down"
+    collab: "ok" | "down" | "unconfigured"
+  }
+  collab: {
+    documents: number
+    connections: number
+    uptimeSeconds: number
+  } | null
+}
+
 // ── Public instance info (no auth) ──────────────────────────────────────────
 
 export type AccessKind = "link" | "password"
@@ -289,6 +307,7 @@ export const adminApi = {
     return api.upload<ImportResult>("/org/import/apply", body)
   },
 
+  getInstanceStatus: () => api.get<InstanceSystemStatus>("/instance/status"),
   getInstanceSettings: () => api.get<InstanceSettings>("/instance/settings"),
   updateInstanceSettings: (
     data: Partial<Omit<InstanceSettings, keyof Seeds | "glassKey">> & {

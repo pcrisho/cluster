@@ -115,10 +115,10 @@ describe("nodeInScope", () => {
 })
 
 describe("isolationBlocksModule", () => {
-  it("is true only when isolated and CONNECT or LIFE is enabled", () => {
-    expect(isolationBlocksModule(true, ["CONNECT"])).toBe(true)
+  it("is true only when isolated and LIFE is enabled", () => {
+    expect(isolationBlocksModule(true, ["CONNECT"])).toBe(false)
     expect(isolationBlocksModule(true, ["LIFE", "KNOW"])).toBe(true)
-    expect(isolationBlocksModule(true, ["KNOW", "GROW"])).toBe(false)
+    expect(isolationBlocksModule(true, ["KNOW", "GROW", "CONNECT"])).toBe(false)
     expect(isolationBlocksModule(false, ["CONNECT", "LIFE"])).toBe(false)
     expect(isolationBlocksModule(false, [])).toBe(false)
   })

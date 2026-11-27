@@ -1,11 +1,15 @@
 "use client"
 
-import { useState, useCallback, useRef } from "react"
+import { useState, useCallback, useEffect, useRef } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { PlusIcon, MousePointerClickIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import { orgApi, type OrgNode } from "@/lib/org-api"
+// Known exception: shown only when GROW is enabled for the organization.
+// eslint-disable-next-line no-restricted-imports
+import { growApi } from "@/lib/grow-api"
+import type { MainNodeComplianceSummary } from "@/lib/root-node-rows"
 import { useFullOrgChart } from "@/hooks/use-full-org-chart"
 import { useIsBelow } from "@/hooks/use-mobile"
 import { useAuth } from "@/lib/auth-context"
@@ -56,10 +60,47 @@ export function AreasPanel() {
   const t = useTranslations("settings.areas")
   const { user } = useAuth()
   const isAdmin = user?.role === "ADMIN"
+  const growEnabled = (user?.modules.includes("GROW") ?? false) && isAdmin
   const isolated = user?.organization.isolated ?? false
   const { ask, dialog } = usePartitionConfirm()
-  const { data, isLoading, error, refresh } = useFullOrgChart()
+  const { data, isLoading, error, refresh: refreshOrgChart } = useFullOrgChart()
   const stacked = useIsBelow(1536)
+
+  const [complianceByNode, setComplianceByNode] =
+    useState<Map<string, MainNodeComplianceSummary> | null>(null)
+  const [complianceLoading, setComplianceLoading] = useState(false)
+  const [complianceTick, setComplianceTick] = useState(0)
+
+  useEffect(() => {
+    if (!growEnabled) return
+    let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled) return
+      setComplianceLoading(true)
+      growApi
+        .getComplianceByMainNode()
+        .then((res) => {
+          if (cancelled) return
+          setComplianceByNode(
+            new Map(res.items.map((item) => [item.mainNodeId, item]))
+          )
+        })
+        .catch(() => {
+          if (!cancelled) setComplianceByNode(null)
+        })
+        .finally(() => {
+          if (!cancelled) setComplianceLoading(false)
+        })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [growEnabled, complianceTick])
+
+  const refresh = useCallback(() => {
+    if (growEnabled) setComplianceTick((n) => n + 1)
+    return refreshOrgChart()
+  }, [growEnabled, refreshOrgChart])
 
   const router = useRouter()
   const pathname = usePathname()
@@ -126,6 +167,13 @@ export function AreasPanel() {
       node={selected}
       nodes={data.nodes}
       isAdmin={isAdmin}
+      showCompliance={growEnabled}
+      compliance={
+        selected.parentId === null
+          ? (complianceByNode?.get(selected.id) ?? null)
+          : null
+      }
+      complianceLoading={complianceLoading}
       onClose={stacked ? undefined : () => setSelectedId(null)}
       onEdit={openEdit}
       onAddChild={openCreate}
@@ -167,6 +215,9 @@ export function AreasPanel() {
             selectedId={selectedId}
             onSelect={setSelectedId}
             onCreate={() => openCreate(null)}
+            showCompliance={growEnabled}
+            complianceByNode={complianceByNode}
+            complianceLoading={complianceLoading}
           />
         ) : (
           <OrgChartTree

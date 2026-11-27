@@ -21,7 +21,7 @@ import { CourseAccessService } from "./course-access.service";
 import { stepForAuthor } from "./course-dto";
 import {
   courseFilePrefix,
-  videoKeyOf,
+  lessonFileKeysOf,
   type LessonContent,
   type LessonFile,
 } from "./lesson-content";
@@ -101,7 +101,7 @@ export class CourseFilesService implements OnModuleInit {
           where: { id: stepId },
           data: { content: content as unknown as Prisma.InputJsonValue },
         });
-        return { updated, previous: videoKeyOf(now.content) };
+        return { updated, previous: lessonFileKeysOf(now.content) };
       })
       .catch(async (error: unknown) => {
         await bestEffort("delete unsaved lesson video", () =>
@@ -109,11 +109,23 @@ export class CourseFilesService implements OnModuleInit {
         );
         throw error;
       });
-    const previous = saved.previous;
-    if (previous)
-      await bestEffort("delete replaced lesson video", () =>
-        this.storage.deleteFile(previous),
+    const candidates = saved.previous.filter((oldKey) => oldKey !== key);
+    if (candidates.length > 0) {
+      const remaining = await this.prisma.courseStep.findMany({
+        where: { courseId: step.courseId },
+        select: { content: true },
+      });
+      const stillReferenced = new Set(
+        remaining.flatMap((s) => lessonFileKeysOf(s.content)),
       );
+      for (const oldKey of candidates) {
+        if (!stillReferenced.has(oldKey)) {
+          await bestEffort("delete replaced lesson file", () =>
+            this.storage.deleteFile(oldKey),
+          );
+        }
+      }
+    }
     return stepForAuthor(saved.updated);
   }
 }

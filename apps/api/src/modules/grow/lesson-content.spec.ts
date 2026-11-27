@@ -1,6 +1,8 @@
 import {
   courseFilePrefix,
+  lessonFileKeysOf,
   parseLessonContent,
+  removedFileKeys,
   videoKeyOf,
 } from "./lesson-content";
 
@@ -129,6 +131,64 @@ describe("parseLessonContent", () => {
     ).toBe("k");
     expect(videoKeyOf({ kind: "files", files: [] })).toBeNull();
     expect(videoKeyOf(null)).toBeNull();
+  });
+
+  it("extracts and diffs lesson file keys across video and files content", () => {
+    const f1 = { key: `${prefix}a.pdf`, name: "a.pdf", size: 1 };
+    const f2 = { key: `${prefix}b.pdf`, name: "b.pdf", size: 2 };
+    const vid = { key: `${prefix}v.mp4`, name: "v.mp4", size: 3 };
+
+    expect(lessonFileKeysOf({ kind: "files", files: [f1, f2, f1] })).toEqual([
+      f1.key,
+      f2.key,
+    ]);
+    expect(lessonFileKeysOf({ kind: "video", video: vid })).toEqual([vid.key]);
+    expect(lessonFileKeysOf({ kind: "text", doc: doc() })).toEqual([]);
+    expect(lessonFileKeysOf({ kind: "link", url: "https://youtu.be/x" })).toEqual(
+      [],
+    );
+    expect(lessonFileKeysOf({ passScore: 80, questions: [] })).toEqual([]);
+    expect(lessonFileKeysOf(null)).toEqual([]);
+
+    // Reordering keeps both files.
+    expect(
+      removedFileKeys(
+        { kind: "files", files: [f1, f2] },
+        { kind: "files", files: [f2, f1] },
+      ),
+    ).toEqual([]);
+    // Removing one file returns only the removed key.
+    expect(
+      removedFileKeys(
+        { kind: "files", files: [f1, f2] },
+        { kind: "files", files: [f2] },
+      ),
+    ).toEqual([f1.key]);
+    // Switching kind removes every previous file or video.
+    expect(
+      removedFileKeys(
+        { kind: "files", files: [f1, f2] },
+        { kind: "text", doc: doc() },
+      ),
+    ).toEqual([f1.key, f2.key]);
+    expect(
+      removedFileKeys(
+        { kind: "files", files: [f1] },
+        { kind: "link", url: "https://youtu.be/x" },
+      ),
+    ).toEqual([f1.key]);
+    expect(
+      removedFileKeys(
+        { kind: "files", files: [f1] },
+        { kind: "video", video: vid },
+      ),
+    ).toEqual([f1.key]);
+    expect(
+      removedFileKeys(
+        { kind: "video", video: vid },
+        { kind: "files", files: [f1] },
+      ),
+    ).toEqual([vid.key]);
   });
 
   it("rejects unknown kinds", () => {

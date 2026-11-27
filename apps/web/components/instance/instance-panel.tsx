@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/table"
 import { PageLoading } from "@/components/layout/page"
 import { AppearancePanel } from "@/components/settings/appearance-panel"
+import { SystemStatusCard } from "@/components/instance/system-status-card"
 import { ModuleSwitches } from "@/components/settings/module-switches"
 import {
   adminApi,
@@ -156,6 +157,8 @@ export function InstancePanel() {
 
   return (
     <div className="flex flex-col gap-6">
+      <SystemStatusCard />
+
       <Card>
         <CardHeader>
           <CardTitle>{t("access")}</CardTitle>

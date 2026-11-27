@@ -154,6 +154,7 @@ model User {
   capabilities      UserCapability[]
   spaceAccess       SpaceAccess[]
   courseAssignments CourseAssignment[]
+  postAudience      PostAudience[]
   enrollments       Enrollment[]
   certificates      Certificate[]
   createdPositions  Position[]            @relation("PositionCreator")
@@ -185,6 +186,7 @@ model OrgNode {
   positions         Position[]
   spaceAccess       SpaceAccess[]
   courseAssignments CourseAssignment[]
+  postAudience      PostAudience[]
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   archivedAt        DateTime?
@@ -212,6 +214,7 @@ model Position {
   profiles          UserProfile[]
   spaceAccess       SpaceAccess[]
   courseAssignments CourseAssignment[]
+  postAudience      PostAudience[]
   createdById       String
   createdBy         User               @relation("PositionCreator", fields: [createdById], references: [id])
   createdAt         DateTime           @default(now())
@@ -273,6 +276,7 @@ model Post {
   type            PostType     @default(POST)
   isPinned        Boolean      @default(false)
   pinnedExpiresAt DateTime?
+  restricted      Boolean      @default(false)
   title           String?
   body            String
   excerpt         String?
@@ -286,9 +290,32 @@ model Post {
 
   likes    PostLike[]
   comments PostComment[]
+  audience PostAudience[]
 
   @@index([organizationId, createdAt])
   @@index([authorId])
+}
+
+model PostAudience {
+  id             String    @id @default(uuid())
+  organizationId String    @default(dbgenerated("app_org_id()"))
+  postId         String
+  post           Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId         String?
+  user           User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orgNodeId      String?
+  orgNode        OrgNode?  @relation(fields: [orgNodeId], references: [id], onDelete: Cascade)
+  positionId     String?
+  position       Position? @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  createdAt      DateTime  @default(now())
+
+  @@unique([postId, userId])
+  @@unique([postId, orgNodeId])
+  @@unique([postId, positionId])
+  @@index([userId])
+  @@index([orgNodeId])
+  @@index([positionId])
+  @@map("post_audience")
 }
 
 model PostLike {

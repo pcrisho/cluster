@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from "@nestjs/common"
+import type { AuthenticatedUser } from "../../common/decorators"
 import { PrismaService } from "../../prisma/prisma.service"
 import { NotificationService } from "../notification/notification.service"
+import { PartitionService } from "../org/partition.service"
 import { bestEffort } from "../../common/best-effort"
 import { UpdateCelebrationsSettingsDto } from "./dto/celebrations.dto"
 
@@ -48,20 +50,28 @@ export class CelebrationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationService,
+    private readonly partition: PartitionService,
   ) {}
 
-  async today(orgId: string, userId: string) {
+  async today(user: AuthenticatedUser) {
+    const { orgId, id: userId } = user
     const org = await this.prisma.organization.findUniqueOrThrow({
       where: { id: orgId },
       select: { timezone: true, ...SETTINGS_SELECT },
     })
     if (!org.celebrationsEnabled) return { success: true, data: { birthdays: [], anniversaries: [] } }
 
+    const scope = await this.partition.scopeFor(user)
     const now = new Date()
     const today = monthDayIn(now, org.timezone)
     const year = now.getUTCFullYear()
     const people = await this.prisma.user.findMany({
-      where: { organizationId: orgId, isActive: true, profile: { isNot: null } },
+      where: {
+        organizationId: orgId,
+        isActive: true,
+        profile: { isNot: null },
+        ...this.partition.peopleFilter(scope),
+      },
       select: {
         id: true,
         firstName: true,
@@ -102,14 +112,20 @@ export class CelebrationsService {
 
   /** Adds the caller's reaction to someone's celebration, or removes it if it was already there. */
   async toggleReaction(
-    userId: string,
-    orgId: string,
+    user: AuthenticatedUser,
     targetUserId: string,
     type: "BIRTHDAY" | "ANNIVERSARY",
     emoji: string,
   ) {
+    const { id: userId, orgId } = user
+    const scope = targetUserId !== userId ? await this.partition.scopeFor(user) : { all: true as const }
     const target = await this.prisma.user.findFirst({
-      where: { id: targetUserId, organizationId: orgId, isActive: true },
+      where: {
+        id: targetUserId,
+        organizationId: orgId,
+        isActive: true,
+        ...(targetUserId !== userId ? this.partition.peopleFilter(scope) : {}),
+      },
       select: { id: true },
     })
     if (!target) throw new NotFoundException("User not found")

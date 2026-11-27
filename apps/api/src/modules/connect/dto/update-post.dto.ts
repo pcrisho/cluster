@@ -7,8 +7,10 @@ import {
   IsBoolean,
   IsDateString,
   IsEnum,
+  ValidateNested,
 } from "class-validator";
-import { PostType } from "./create-post.dto";
+import { Type } from "class-transformer";
+import { PostAudienceEntryDto, PostType } from "./create-post.dto";
 
 export class UpdatePostDto {
   @IsString()
@@ -42,4 +44,15 @@ export class UpdatePostDto {
   @IsDateString()
   @IsOptional()
   pinnedExpiresAt?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  restricted?: boolean;
+
+  @IsArray()
+  @IsOptional()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => PostAudienceEntryDto)
+  audience?: PostAudienceEntryDto[];
 }

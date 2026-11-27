@@ -15,9 +15,10 @@ if [ "$tables" != 0 ] && [ -z "$force" ]; then
 fi
 
 out=$BACKUP_DIR/restore
+mkdir -p "$BACKUP_DIR"
 rm -rf "$out"
 mkdir -p "$out"
-restic restore "${1:-latest}" --target "$out"
+run_restic restore "${1:-latest}" --target "$out"
 dump=$(find "$out" -name cluster.dump)
 [ -f "$dump" ] || { echo "no cluster.dump in the snapshot" >&2; exit 1; }
 
@@ -27,6 +28,7 @@ clean=
 [ -z "$force" ] || clean="--clean --if-exists"
 dc exec -T postgres sh -c "exec pg_restore -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" --single-transaction $clean" < "$dump"
 dc run --rm migrate # roles again, and migrate deploy: nothing to apply after a restore
+rclone_s3 mkdir "s3:${STORAGE_BUCKET:-cluster}"
 rclone_s3 copy "$(dirname "$dump")/bucket" "s3:${STORAGE_BUCKET:-cluster}" # copy, never sync: it deletes nothing
 rm -rf "$out"
 echo "restored; now: docker compose up -d"

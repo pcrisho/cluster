@@ -13,13 +13,13 @@ export class CelebrationsController {
   @Throttle({ default: { limit: 60, ttl: 60000 } })
   @Get("today")
   today(@CurrentUser() user: AuthenticatedUser) {
-    return this.celebrations.today(user.orgId, user.id)
+    return this.celebrations.today(user)
   }
 
   @Post("reactions")
   @HttpCode(HttpStatus.OK)
   react(@Body() dto: ToggleReactionDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.celebrations.toggleReaction(user.id, user.orgId, dto.targetUserId, dto.type, dto.emoji)
+    return this.celebrations.toggleReaction(user, dto.targetUserId, dto.type, dto.emoji)
   }
 
   @Throttle({ default: { limit: 30, ttl: 60000 } })

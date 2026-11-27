@@ -200,8 +200,10 @@
       "DATE_IN_FUTURE": "La fecha no puede ser futura.",
       "ISOLATION_NOT_ALLOWED": "La instancia no permite aislar los nodos principales. Pide al administrador de la instancia que lo permita.",
       "ISOLATION_IN_USE": "Algunas organizaciones todavía aíslan sus nodos principales. Desactívalo primero en cada una.",
-      "ISOLATION_MODULES": "Desactiva CONNECT y LIFE antes de aislar los nodos principales.",
+      "ISOLATION_MODULES": "Desactiva LIFE antes de aislar los nodos principales.",
       "ISOLATION_OPEN_SPACE": "Solo quienes ven todos los nodos principales (administradores, moderadores y gestores de cursos) pueden abrir un espacio a todos ellos.",
+      "ISOLATION_OPEN_POST": "Solo quienes ven todos los nodos principales (administradores, moderadores y gestores de cursos) pueden publicar para todos.",
+      "POST_AUDIENCE_REQUIRED": "Elige al menos una persona, área o puesto para esta publicación.",
       "NODE_REQUIRED": "Mientras los nodos principales estén aislados, cada colaborador necesita un área.",
       "MANAGER_OTHER_PARTITION": "El responsable de un área debe pertenecer al mismo nodo principal que el área.",
       "NODE_CODE_TAKEN": "Otra área ya usa ese código.",
@@ -216,7 +218,8 @@
       "IMPORT_UNREADABLE": "No se puede leer este archivo como un libro de Excel (.xlsx).",
       "IMPORT_HEADERS": "La fila de encabezados no coincide con la plantilla. Descarga la plantilla y conserva los nombres de sus columnas.",
       "IMPORT_INVALID": "El archivo tiene errores, así que no se importó nada.",
-      "IMPORT_CONFLICT": "Los datos cambiaron mientras se importaba. No se importó nada; se vuelve a revisar el archivo."
+      "IMPORT_CONFLICT": "Los datos cambiaron mientras se importaba. No se importó nada; se vuelve a revisar el archivo.",
+      "LESSON_FILE_IN_USE": "Un archivo ya pertenece a otra lección."
     }
   },
   "timeZonePicker": {
@@ -538,7 +541,11 @@
       "kind": "Tipo",
       "internal": "Interno",
       "external": "Externo",
-      "editMain": "Editar nodo principal"
+      "editMain": "Editar nodo principal",
+      "compliance": "Cumplimiento",
+      "noMandatoryCourses": "Sin cursos obligatorios",
+      "overdueCount": "{count, plural, one {# vencido} other {# vencidos}}",
+      "viewReport": "Ver reporte de cumplimiento"
     },
     "areaTree": {
       "drag": "Mover “{name}”",
@@ -709,11 +716,11 @@
         "title": "Nodos principales",
         "description": "Los nodos principales son las áreas de primer nivel del organigrama.",
         "label": "Aislar los nodos principales",
-        "hint": "Cada nodo principal ve solo a sus personas, áreas y puestos. Los espacios y cursos que no están restringidos siguen visibles para todos los nodos principales.",
+        "hint": "Cada nodo principal ve solo a sus personas, áreas y puestos. Los espacios, cursos y publicaciones que no están restringidos siguen visibles para todos los nodos principales.",
         "blockedInstance": "La instancia no permite el aislamiento. Pide al administrador de la instancia que lo permita.",
-        "blockedModules": "Desactiva primero CONNECT y LIFE. No pueden funcionar aislados.",
+        "blockedModules": "Desactiva primero LIFE. No puede funcionar aislado.",
         "onTitle": "¿Aislar los nodos principales?",
-        "onBody": "Los espacios y cursos que no están restringidos siguen visibles para todos los nodos principales.",
+        "onBody": "Los espacios, cursos y publicaciones que no están restringidos siguen visibles para todos los nodos principales.",
         "withoutNode": "{count, plural, one {# persona activa no tiene nodo principal y no verá a nadie.} other {# personas activas no tienen nodo principal y no verán a nadie.}}",
         "onConfirm": "Aislar",
         "offTitle": "¿Dejar de aislar los nodos principales?",
@@ -962,6 +969,7 @@
       "sortBy": "Ordenar por",
       "sortName": "Nombre",
       "sortPeople": "Más personas",
+      "sortCompliance": "Menor cumplimiento",
       "noMatch": "Ningún nodo principal coincide con tu búsqueda.",
       "name": "Nombre",
       "code": "Código",
@@ -969,6 +977,10 @@
       "manager": "Responsable",
       "people": "Personas",
       "areas": "Áreas",
+      "compliance": "Cumplimiento",
+      "complianceTooltip": "{completed} de {total} cursos obligatorios completados",
+      "complianceTooltipOverdue": "{completed} de {total} completados · {overdue, plural, one {# vencido} other {# vencidos}}",
+      "viewReport": "Ver reporte",
       "noManager": "Sin responsable",
       "peopleCount": "{count, plural, one {# persona} other {# personas}}"
     },
@@ -1114,6 +1126,37 @@
       "label": "Permitir el aislamiento de nodos principales",
       "hint": "Cuando está activo, una organización puede aislar sus nodos principales: cada uno ve solo a sus personas y su estructura. No puedes desactivarlo mientras alguna organización lo siga aislando.",
       "isolated": "Aislada"
+    },
+    "systemStatus": {
+      "title": "Estado del sistema",
+      "description": "Salud en vivo de los servicios centrales. Las alertas externas y los respaldos programados se configuran en el servidor.",
+      "refresh": "Actualizar",
+      "refreshing": "Comprobando…",
+      "loadError": "No se pudo cargar el estado del sistema.",
+      "retry": "Reintentar",
+      "overall": {
+        "ok": "Todos los sistemas operativos",
+        "degraded": "Degradado",
+        "down": "No disponible"
+      },
+      "states": {
+        "ok": "Operativo",
+        "down": "Caído",
+        "unconfigured": "Sin configurar",
+        "mailOn": "Configurado",
+        "mailOff": "Correo apagado"
+      },
+      "services": {
+        "database": "PostgreSQL",
+        "redis": "Redis",
+        "storage": "Almacenamiento de objetos",
+        "collab": "Edición en tiempo real",
+        "mail": "Correo (SMTP)"
+      },
+      "collabMetrics": "{documents, plural, one {# documento abierto} other {# documentos abiertos}}, {connections, plural, one {# conexión} other {# conexiones}}",
+      "uptime": "Tiempo activo de la API: {uptime}",
+      "checkedAt": "Comprobado {time}",
+      "healthHint": "Endpoint público: /api/v1/health"
     }
   },
   "shell": {
@@ -2467,7 +2510,11 @@
       "like": "Me gusta ({count})",
       "commentsCount": "Comentarios ({count})",
       "noCommentsInline": "Todavía no hay comentarios. ¡Sé el primero!",
-      "commentActions": "Acciones del comentario"
+      "commentActions": "Acciones del comentario",
+      "visibleToEveryMainNode": "Visible para todos los nodos principales",
+      "audienceRestricted": "Audiencia específica",
+      "audienceHiddenOnly": "{count, plural, one {# entrada oculta} other {# entradas ocultas}}",
+      "audienceNamesMore": "{names} +{count}"
     },
     "profile": {
       "back": "Volver al directorio",
@@ -2515,7 +2562,16 @@
       "createDescription": "Comparte algo con tu organización",
       "publishing": "Publicando…",
       "publish": "Publicar",
-      "placeholder": "¿De qué quieres hablar?"
+      "placeholder": "¿De qué quieres hablar?",
+      "audienceLabel": "Audiencia",
+      "audienceEveryone": "Todos",
+      "audienceAllMainNodes": "Todos los nodos principales",
+      "audienceSpecific": "Audiencia específica",
+      "audienceOpenHint": "Visible para todos los nodos principales de la organización.",
+      "audienceNoArea": "Mientras los nodos principales estén aislados, necesitas un área asignada para publicar.",
+      "audienceSelected": "Seleccionado",
+      "removeAudience": "Quitar {name}",
+      "hiddenAudience": "{count, plural, one {# entrada en otro nodo principal está oculta} other {# entradas en otros nodos principales están ocultas}}"
     },
     "directory": {
       "title": "Directorio",

@@ -7,6 +7,12 @@ import { Injectable } from "@nestjs/common"
 export class ConnectGateway {
   @WebSocketServer() server!: Server
 
+  private target(orgId: string, userIds?: string[] | null) {
+    if (userIds === undefined || userIds === null) return this.server.to(`org:${orgId}`)
+    if (userIds.length === 0) return null
+    return this.server.to([...new Set(userIds)].map((id) => `user:${id}`))
+  }
+
   emitPostCreated(
     orgId: string,
     data: {
@@ -15,8 +21,9 @@ export class ConnectGateway {
       authorId: string
       authorName: string
     },
+    userIds?: string[] | null,
   ) {
-    this.server.to(`org:${orgId}`).emit("connect:post:created", data)
+    this.target(orgId, userIds)?.emit("connect:post:created", data)
   }
 
   emitPostLiked(
@@ -29,14 +36,16 @@ export class ConnectGateway {
       /** The newest likers, so every open feed can name them without asking again. */
       recentLikers: { id: string; firstName: string; lastName: string; avatarUrl: string | null }[]
     },
+    userIds?: string[] | null,
   ) {
-    this.server.to(`org:${orgId}`).emit("connect:post:liked", data)
+    this.target(orgId, userIds)?.emit("connect:post:liked", data)
   }
 
   emitCommentCreated(
     orgId: string,
     data: { postId: string; commentId: string; authorId: string },
+    userIds?: string[] | null,
   ) {
-    this.server.to(`org:${orgId}`).emit("connect:comment:created", data)
+    this.target(orgId, userIds)?.emit("connect:comment:created", data)
   }
 }

@@ -156,7 +156,7 @@ describe("row-level security guards on the schema", () => {
     ).rejects.toThrow(/permission denied/);
   });
 
-  it("puts the org_from_parent trigger on each of the 18 child tables", async () => {
+  it("puts the org_from_parent trigger on each of the 19 child tables", async () => {
     const children = await system.$queryRaw<
       { name: string; triggers: number }[]
     >`
@@ -169,7 +169,7 @@ describe("row-level security guards on the schema", () => {
       JOIN pg_attrdef d ON d.adrelid = at.attrelid AND d.adnum = at.attnum
       WHERE at.attname = 'organizationId' AND n.nspname = 'public' AND c.relkind = 'r'
         AND pg_get_expr(d.adbin, d.adrelid) LIKE '%app_org_id()%'`;
-    expect(children.length).toBe(18);
+    expect(children.length).toBe(19);
     expect(children.filter((c) => c.triggers !== 1).map((c) => c.name)).toEqual(
       [],
     );

@@ -56,7 +56,7 @@ export function nodeInScope(scope: PartitionScope, nodeId: string | null): boole
   return nodeId !== null && scope.nodeIds.has(nodeId)
 }
 
-/** Whether isolation conflicts with a module: CONNECT and LIFE are not partitioned, so they cannot run isolated. */
+/** Whether isolation conflicts with a module: LIFE is not partitioned yet, so it cannot run isolated. */
 export function isolationBlocksModule(isolated: boolean, modules: readonly string[]): boolean {
-  return isolated && (modules.includes("CONNECT") || modules.includes("LIFE"))
+  return isolated && modules.includes("LIFE")
 }

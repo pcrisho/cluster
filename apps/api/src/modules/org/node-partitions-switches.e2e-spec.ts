@@ -121,29 +121,30 @@ describe("Node partitions: the two switches e2e", () => {
     await http.get("/api/v1/org").set(collaborator.auth).expect(403);
   });
 
-  it("switching isolation on with CONNECT or LIFE enabled answers ISOLATION_MODULES, both ways", async () => {
+  it("switching isolation on with LIFE enabled answers ISOLATION_MODULES, both ways, while CONNECT is allowed", async () => {
     await setInstance(true);
     const admin = await createActor(app, "iso-modules-admin", "ADMIN");
     touchedOrgs.push(admin.orgId);
 
-    // A new organization has every module enabled.
+    // A new organization has every module enabled (including LIFE).
     const blocked = await patchOrg({ isolateRootNodes: true }, admin).expect(
       409,
     );
     expect(blocked.body.code).toBe("ISOLATION_MODULES");
 
-    await patchOrg({ enabledModules: ["KNOW", "GROW"] }, admin).expect(200);
+    await patchOrg({ enabledModules: ["KNOW", "GROW", "CONNECT"] }, admin).expect(200);
     await patchOrg({ isolateRootNodes: true }, admin).expect(200);
     expect((await orgRow(admin.orgId)).isolateRootNodes).toBe(true);
 
     const enable = await patchOrg(
-      { enabledModules: ["KNOW", "GROW", "CONNECT"] },
+      { enabledModules: ["KNOW", "GROW", "CONNECT", "LIFE"] },
       admin,
     ).expect(409);
     expect(enable.body.code).toBe("ISOLATION_MODULES");
     expect((await orgRow(admin.orgId)).enabledModules).toEqual([
       "KNOW",
       "GROW",
+      "CONNECT",
     ]);
 
     await patchOrg({ isolateRootNodes: false }, admin).expect(200);

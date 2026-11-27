@@ -30,19 +30,19 @@ export class PostsController {
     @Query("sort") sort: string | undefined,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.posts.getFeed(user.orgId, user.id, pagination.cursor, pagination.limit, sort === "recent" ? "recent" : "top")
+    return this.posts.getFeed(user, pagination.cursor, pagination.limit, sort === "recent" ? "recent" : "top")
   }
 
   @Throttle({ default: { limit: 60, ttl: 60000 } })
   @Post("posts")
   create(@Body() dto: CreatePostDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.posts.createPost(dto, user.id, user.orgId, user.role)
+    return this.posts.createPost(dto, user)
   }
 
   @Throttle({ default: { limit: 60, ttl: 60000 } })
   @Patch("posts/:id")
   update(@Param("id") id: string, @Body() dto: UpdatePostDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.posts.updatePost(id, dto, user.id, user.orgId, user.role)
+    return this.posts.updatePost(id, dto, user)
   }
 
   @Throttle({ default: { limit: 60, ttl: 60000 } })
@@ -54,12 +54,12 @@ export class PostsController {
   @Throttle({ default: { limit: 600, ttl: 60000 } })
   @Get("posts/:id/likes")
   likes(@Param("id") id: string, @Query() pagination: CursorPaginationDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.posts.listLikes(id, user.orgId, pagination.cursor, pagination.limit)
+    return this.posts.listLikes(id, user, pagination.cursor, pagination.limit)
   }
 
   @Post("posts/:id/like")
   @HttpCode(HttpStatus.OK)
   like(@Param("id") id: string, @CurrentUser() user: AuthenticatedUser) {
-    return this.posts.toggleLike(id, user.id, user.orgId)
+    return this.posts.toggleLike(id, user)
   }
 }

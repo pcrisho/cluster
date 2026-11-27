@@ -1,65 +1,18 @@
 import { Controller, Get, ServiceUnavailableException } from "@nestjs/common";
 import { SkipThrottle } from "@nestjs/throttler";
-import Redis from "ioredis";
 import { Public } from "./common/decorators";
+import {
+  type CheckStatus,
+  pingRedis,
+  probe,
+  summarize,
+} from "./common/health-probes";
 import { SystemPrismaService } from "./prisma/system-prisma.service";
 import { StorageService } from "./modules/storage/storage.service";
 
-const CHECK_TIMEOUT_MS = 1000;
+export { summarize };
+
 const CACHE_MS = 5000;
-
-type Check = "ok" | "down";
-
-/** Redis and storage only report: the API answers 200 while Postgres is up (the rate limit fails open). */
-export function summarize(checks: {
-  database: Check;
-  redis: Check;
-  storage: Check;
-}) {
-  const degraded = checks.redis !== "ok" || checks.storage !== "ok";
-  return { status: degraded ? "degraded" : "ok", checks };
-}
-
-async function probe(run: () => Promise<unknown>): Promise<Check> {
-  let timer: NodeJS.Timeout | undefined;
-  try {
-    await Promise.race([
-      run(),
-      new Promise((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error("timeout")),
-          CHECK_TIMEOUT_MS,
-        );
-      }),
-    ]);
-    return "ok";
-  } catch {
-    return "down";
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-/** One short-lived connection per probe round (at most one every CACHE_MS): nothing to keep alive or reconnect. */
-async function pingRedis() {
-  const redis = new Redis({
-    host: process.env.REDIS_HOST || "localhost",
-    port: Number(process.env.REDIS_PORT) || 6379,
-    password: process.env.REDIS_PASSWORD || undefined,
-    lazyConnect: true,
-    enableOfflineQueue: false,
-    maxRetriesPerRequest: 1,
-    connectTimeout: CHECK_TIMEOUT_MS,
-    retryStrategy: () => null,
-  });
-  redis.on("error", () => undefined);
-  try {
-    await redis.connect();
-    await redis.ping();
-  } finally {
-    redis.disconnect();
-  }
-}
 
 /** Used by the Docker healthcheck (docker-compose.yml) and the external uptime check. */
 @Controller("health")
@@ -70,7 +23,7 @@ export class HealthController {
   ) {}
 
   // Public and unthrottled: one probe round per CACHE_MS however many callers, so it cannot be used to open connections.
-  private last?: { at: number; checks: Promise<Check[]> };
+  private last?: { at: number; checks: Promise<CheckStatus[]> };
 
   @Public()
   @SkipThrottle()

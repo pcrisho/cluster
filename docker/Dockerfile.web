@@ -1,5 +1,5 @@
-FROM node:24-alpine AS base
-RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+FROM node:24.22.3-alpine AS base
+RUN corepack enable && corepack prepare pnpm@10.34.9 --activate
 WORKDIR /app
 
 FROM base AS deps
@@ -26,7 +26,7 @@ COPY --from=deps /app/packages/theme/node_modules ./packages/theme/node_modules
 COPY . .
 RUN pnpm --filter @cluster/editor-schema build && pnpm --filter @cluster/theme build && pnpm --filter @cluster/web build
 
-FROM node:24-alpine AS runner
+FROM node:24.22.3-alpine AS runner
 ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0 NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 WORKDIR /app

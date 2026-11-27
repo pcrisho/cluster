@@ -5,6 +5,7 @@ import { InstanceService } from "./instance.service";
 import type { SystemPrismaService } from "../../prisma/system-prisma.service";
 import type { AuthService } from "../auth/auth.service";
 import type { InvitationService } from "../auth/invitation.service";
+import type { StorageService } from "../storage/storage.service";
 
 describe("InstanceService.onApplicationBootstrap (first superadmin)", () => {
   function setup(
@@ -12,6 +13,7 @@ describe("InstanceService.onApplicationBootstrap (first superadmin)", () => {
     db: { superAdmin?: object; userByEmail?: object },
   ) {
     const prisma = {
+      $queryRaw: jest.fn().mockResolvedValue([{ "?column?": 1 }]),
       instanceSettings: { findUnique: jest.fn().mockResolvedValue({ id: 1 }) },
       user: {
         findFirst: jest.fn().mockResolvedValue(db.superAdmin ?? null),
@@ -27,6 +29,7 @@ describe("InstanceService.onApplicationBootstrap (first superadmin)", () => {
           user: { id: "u-new", email: "root@x.com" },
         }),
     };
+    const storage = { ping: jest.fn().mockResolvedValue(true) };
     const service = new InstanceService(
       prisma as unknown as SystemPrismaService,
       auth as unknown as AuthService,
@@ -35,8 +38,9 @@ describe("InstanceService.onApplicationBootstrap (first superadmin)", () => {
         get: (key: string, fallback?: string) => env[key] ?? fallback,
       } as unknown as ConfigService,
       { enabled: true } as unknown as MailService,
+      storage as unknown as StorageService,
     );
-    return { service, prisma, auth };
+    return { service, prisma, auth, storage };
   }
 
   const env = {
@@ -103,5 +107,15 @@ describe("InstanceService.onApplicationBootstrap (first superadmin)", () => {
       where: { id: "u-new" },
       data: { isSuperAdmin: true },
     });
+  });
+
+  it("getSystemStatus reports checks including unconfigured collab", async () => {
+    const { service } = setup({}, {});
+    const status = await service.getSystemStatus();
+    expect(status.checks.database).toBe("ok");
+    expect(status.checks.storage).toBe("ok");
+    expect(status.checks.collab).toBe("unconfigured");
+    expect(status.mailEnabled).toBe(true);
+    expect(status.collab).toBeNull();
   });
 });

@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import Link from "next/link"
 import {
   ChevronRightIcon,
   NetworkIcon,
@@ -15,9 +16,11 @@ import {
   rootNodeRows,
   sortRootRows,
   type KindFilter,
+  type MainNodeComplianceSummary,
   type RootNodeRow,
   type RootSort,
 } from "@/lib/root-node-rows"
+import { cn } from "@/lib/utils"
 import { OrgNodeIcon } from "@/components/shared/org-node-icon"
 import { PersonAvatar } from "@/components/settings/area-detail-panel"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -53,6 +56,11 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 interface MainNodesTableProps {
   data: FullOrgChartData | null
@@ -62,6 +70,9 @@ interface MainNodesTableProps {
   selectedId: string | null
   onSelect: (id: string) => void
   onCreate: () => void
+  showCompliance?: boolean
+  complianceByNode?: ReadonlyMap<string, MainNodeComplianceSummary> | null
+  complianceLoading?: boolean
 }
 
 function KindBadge({ external }: { external: boolean }) {
@@ -82,16 +93,23 @@ export function MainNodesTable({
   selectedId,
   onSelect,
   onCreate,
+  showCompliance = false,
+  complianceByNode = null,
+  complianceLoading = false,
 }: MainNodesTableProps) {
   const t = useTranslations("settings.mainNodes")
   const [query, setQuery] = useState("")
   const [kind, setKind] = useState<KindFilter>("all")
   const [sort, setSort] = useState<RootSort>("name")
+  const effectiveSort = !showCompliance && sort === "compliance" ? "name" : sort
 
-  const all = useMemo(() => rootNodeRows(data?.nodes ?? []), [data?.nodes])
+  const all = useMemo(
+    () => rootNodeRows(data?.nodes ?? [], complianceByNode),
+    [data?.nodes, complianceByNode]
+  )
   const rows = useMemo(
-    () => sortRootRows(filterRootRows(all, { query, kind }), sort),
-    [all, query, kind, sort]
+    () => sortRootRows(filterRootRows(all, { query, kind }), effectiveSort),
+    [all, query, kind, effectiveSort]
   )
 
   if (isLoading && !data) {
@@ -165,10 +183,13 @@ export function MainNodesTable({
           <ToggleGroupItem value="internal">{t("internal")}</ToggleGroupItem>
           <ToggleGroupItem value="external">{t("external")}</ToggleGroupItem>
         </ToggleGroup>
-        <Select value={sort} onValueChange={(v) => setSort(v as RootSort)}>
+        <Select
+          value={effectiveSort}
+          onValueChange={(v) => setSort(v as RootSort)}
+        >
           <SelectTrigger
             size="sm"
-            className="w-full sm:ml-auto sm:w-40"
+            className="w-full sm:ml-auto sm:w-44"
             aria-label={t("sortBy")}
           >
             <SelectValue />
@@ -176,6 +197,9 @@ export function MainNodesTable({
           <SelectContent>
             <SelectItem value="name">{t("sortName")}</SelectItem>
             <SelectItem value="people">{t("sortPeople")}</SelectItem>
+            {showCompliance && (
+              <SelectItem value="compliance">{t("sortCompliance")}</SelectItem>
+            )}
           </SelectContent>
         </Select>
       </div>
@@ -198,6 +222,11 @@ export function MainNodesTable({
                   </TableHead>
                   <TableHead className="text-right">{t("people")}</TableHead>
                   <TableHead className="text-right">{t("areas")}</TableHead>
+                  {showCompliance && (
+                    <TableHead className="text-right">
+                      {t("compliance")}
+                    </TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -207,6 +236,8 @@ export function MainNodesTable({
                     row={row}
                     selected={row.node.id === selectedId}
                     onSelect={onSelect}
+                    showCompliance={showCompliance}
+                    complianceLoading={complianceLoading && !complianceByNode}
                   />
                 ))}
               </TableBody>
@@ -214,7 +245,7 @@ export function MainNodesTable({
           </div>
 
           <ul className="divide-y overflow-hidden rounded-lg border lg:hidden">
-            {rows.map(({ node, people }) => (
+            {rows.map(({ node, people, compliance }) => (
               <li key={node.id}>
                 <button
                   type="button"
@@ -231,7 +262,13 @@ export function MainNodesTable({
                       {node.name}
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">
-                      {[node.code, t("peopleCount", { count: people })]
+                      {[
+                        node.code,
+                        t("peopleCount", { count: people }),
+                        showCompliance && compliance && compliance.rate !== null
+                          ? `${compliance.rate}% (${compliance.completed}/${compliance.total})`
+                          : null,
+                      ]
                         .filter(Boolean)
                         .join(" · ")}
                     </span>
@@ -249,13 +286,17 @@ export function MainNodesTable({
 }
 
 function MainNodeTableRow({
-  row: { node, people, areas },
+  row: { node, people, areas, compliance },
   selected,
   onSelect,
+  showCompliance,
+  complianceLoading,
 }: {
   row: RootNodeRow
   selected: boolean
   onSelect: (id: string) => void
+  showCompliance: boolean
+  complianceLoading: boolean
 }) {
   const t = useTranslations("settings.mainNodes")
   return (
@@ -304,6 +345,53 @@ function MainNodeTableRow({
       </TableCell>
       <TableCell className="text-right tabular-nums">{people}</TableCell>
       <TableCell className="text-right tabular-nums">{areas}</TableCell>
+      {showCompliance && (
+        <TableCell className="text-right">
+          {complianceLoading ? (
+            <Skeleton className="ml-auto h-4 w-16" />
+          ) : !compliance || compliance.rate === null ? (
+            <span className="text-muted-foreground">&mdash;</span>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link
+                  href={`/grow/reports?orgNodeId=${node.id}`}
+                  className="relative z-10 inline-flex items-baseline justify-end gap-1.5 rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/50"
+                >
+                  <span
+                    className={cn(
+                      "font-medium tabular-nums",
+                      compliance.rate === 100
+                        ? "text-success-text"
+                        : compliance.overdue > 0
+                          ? "text-danger-text"
+                          : "text-foreground"
+                    )}
+                  >
+                    {compliance.rate}%
+                  </span>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {compliance.completed}/{compliance.total}
+                  </span>
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent>
+                {compliance.overdue > 0
+                  ? t("complianceTooltipOverdue", {
+                      completed: compliance.completed,
+                      total: compliance.total,
+                      overdue: compliance.overdue,
+                    })
+                  : t("complianceTooltip", {
+                      completed: compliance.completed,
+                      total: compliance.total,
+                    })}{" "}
+                · {t("viewReport")}
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </TableCell>
+      )}
     </TableRow>
   )
 }

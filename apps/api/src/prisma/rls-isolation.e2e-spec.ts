@@ -55,6 +55,9 @@ describe("row-level security isolates every tenant table", () => {
     await system.postComment.create({
       data: { postId: post.id, authorId: userId, body: "c" },
     });
+    await system.postAudience.create({
+      data: { postId: post.id, userId },
+    });
     await system.auditLog.create({
       data: {
         actorId: userId,
