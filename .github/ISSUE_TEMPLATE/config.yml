@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://docs.clusterhq.app
+    about: Guides for evaluating, self-hosting and using Cluster. Check here before opening an issue.
+  - name: Report a security vulnerability
+    url: https://github.com/pcrisho/cluster/blob/main/SECURITY.md
+    about: Do not open public issues for security reports. Follow SECURITY.md and email security@clusterhq.app.
